@@ -14,6 +14,7 @@ $desk = [Environment]::GetFolderPath("Desktop")
 $out = Join-Path $desk "SesDefteri-Basit"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 Copy-Item -Recurse dist\SesDefteri $out
+Copy-Item KULLANIM.txt $out  # the one-page guide next to the exe
 $zip = Join-Path $desk "SesDefteri-Basit.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Push-Location $desk; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
