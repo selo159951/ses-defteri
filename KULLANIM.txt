@@ -1,0 +1,47 @@
+﻿SES DEFTERİ - KULLANIM KILAVUZU
+
+Bu program, bir video ya da ses kaydındaki konuşmaları yazıya döker.
+Her şey bilgisayarının içinde olur. İnternet gerekmez, hiçbir şey dışarı gönderilmez.
+(mp4, mp3, wav, m4a ve çoğu video ve ses dosyasıyla çalışır.)
+
+AÇMAK
+1. Program zip olarak geldiyse: zip dosyasına sağ tıkla, "Tümünü ayıkla" de. Sonra açılan klasörü aç.
+2. "SesDefteri-Basit" klasörünün içindeki "SesDefteri.exe" dosyasına çift tıkla.
+3. Mavi bir uyarı çıkarsa ("Windows bilgisayarınızı korudu") korkma. Önce "Ek bilgi"ye,
+   sonra "Yine de çalıştır"a tıkla. Bu sadece ilk seferde çıkar.
+4. İpucu: SesDefteri.exe'ye sağ tıkla, "Gönder", sonra "Masaüstü (kısayol oluştur)" de.
+   Böylece program masaüstünde durur.
+
+BİR KAYDI YAZIYA DÖKMEK
+1. Pencerede büyük bir alan var: "Videoyu ya da ses kaydını buraya sürükleyip bırak".
+2. Videoyu ya da ses dosyasını fareyle tutup bu alana bırak.
+   Ya da mavi "Dosya seç" düğmesine bas ve dosyayı seç.
+3. Bir çubuk görünür. Ne kadar kaldığını yazar ("yaklaşık 5 dakika kaldı").
+4. Bilgisayar açık kalsın. Uzun kayıtlarda biraz sürebilir. Sen bir çay iç, bekle.
+5. Programı yarıda kapatırsan sorun olmaz. Tekrar açınca kaldığı yerden devam eder.
+
+SONUCU OKUMAK VE DİNLEMEK
+1. İş bitince kayıt "Önceki kayıtlar" bölümünde görünür. Adına tıkla, açılsın.
+2. Yazı konuşanlara göre bölünmüştür: "Konuşmacı 1", "Konuşmacı 2" gibi.
+3. Yukarıdaki "Konuşmacı 1" yazısına tıkla, gerçek adını yaz. Her yerde değişir.
+4. Her satırın başındaki süre kutusuna tıkla, o kısmı dinlersin.
+5. En alttaki oynat düğmesi tüm kaydı çalar.
+
+WORD OLARAK KAYDETMEK
+1. Kaydı aç. Sağ üstteki mavi "Dışa aktar" düğmesine bas.
+2. "Word (.docx)" seçili kalsın.
+3. "Kaydet..." düğmesine bas.
+4. Nereye kaydedeceğini seç (örneğin "Masaüstü") ve "Kaydet"e bas.
+5. Word dosyasını açabilir, yazdırabilir ya da başkasına gönderebilirsin.
+
+ESKİ KAYITLARI BULMAK
+1. "Kayıtlarda ara" kutusuna bir şey yaz. Kayıtların adında ve konuşulanların içinde arar.
+2. "En yeni" kutusu sıralamayı değiştirir.
+3. "Yeniden adlandır" kaydın adını değiştirir.
+4. "Sil" kaydı listeden kaldırır. Bilgisayardaki asıl video ya da ses dosyası silinmez.
+
+BİR SORUN OLURSA
+- Dosyayı bıraktım ama bir şey olmadı: Bu sefer "Dosya seç" düğmesine basıp dosyayı oradan seç.
+- Program kapandı: Hiç sorun değil. SesDefteri.exe'ye tekrar çift tıkla, kaldığı yerden devam eder.
+- Yazıda yanlış yerler var: Yazının üstüne tıklayıp düzeltebilirsin.
+- Çok uzun sürüyor: Normal. Uzun kayıtlar biraz sürer. Bilgisayarı kapatma, bekle.
