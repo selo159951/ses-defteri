@@ -118,6 +118,39 @@ class Api(SystemApi, LlmApi):
         """Start (or retry) the download of the missing models; returns the same as first_run_status()."""
         return models.start_first_run_download()
 
+    # ---------------- first start: two bundled sample recordings ----------------
+    SAMPLES = (("ornek-uc-kisi.wav", "Örnek: üç kişilik toplantı"), ("ornek-tek-kisi.wav", "Örnek: tek kişi konuşuyor"))
+
+    @staticmethod
+    def _samples_dir() -> Path:
+        import sys
+
+        if getattr(sys, "frozen", False):
+            return Path(getattr(sys, "_MEIPASS", "")) / "assets" / "samples"
+        return Path(__file__).resolve().parents[1] / "assets" / "samples"
+
+    def start_samples_once(self) -> list:
+        """On the very first start (after the model download) process the two bundled sample recordings,
+        so the user sees at once that the app works and what a result looks like. Only once per data folder."""
+        if asr.get_settings().get("samples_started"):
+            return []
+        asr.set_setting("samples_started", True)
+        out = []
+        for fname, title in self.SAMPLES:
+            p = self._samples_dir() / fname
+            if not p.is_file():
+                continue
+            res = self.start_jobs([str(p)])
+            for r in res:
+                if r.get("id"):
+                    try:
+                        store.rename_job(r["id"], title)
+                        r["filename"] = title
+                    except Exception:
+                        pass
+            out += res
+        return out
+
     def get_queue(self) -> dict:
         """The recording that is processed now and the ones waiting, in the order they will run."""
         def entry(i):

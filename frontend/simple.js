@@ -50,4 +50,9 @@ document.addEventListener("DOMContentLoaded", () => {
   pick.onclick = (e) => { e.preventDefault(); e.stopPropagation(); link.click(); };
   link.closest("p").hidden = true;
   drop.querySelector(".big").after(pick, hint);
+  // very first start: the two bundled sample recordings are processed by themselves (test + example result)
+  (window.firstRunGate || Promise.resolve())
+    .then(() => call("start_samples_once"))
+    .then((r) => { if (r && r.length) window.onJobsStarted(r); })
+    .catch(() => {});
 });
