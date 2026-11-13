@@ -12,7 +12,7 @@ FRONT = ROOT / "frontend"
 
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
-    monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path))
+    monkeypatch.setenv("SESDEFTERIBASIT_HOME", str(tmp_path))
 
 
 def _blocks():

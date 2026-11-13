@@ -28,6 +28,19 @@ def root() -> Path:
     return Path(env) if env else store.data_dir() / "models"
 
 
+def bundled(name: str = "large-v3-turbo") -> Path | None:
+    """The speech model shipped inside the simple app, so nothing is downloaded on first start."""
+    import sys
+
+    if name != "large-v3-turbo":
+        return None
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", "")) / "whisper"
+    else:
+        base = Path(__file__).resolve().parents[1] / "models" / "whisper-large-v3-turbo"
+    return base if (base / "model.bin").is_file() else None
+
+
 def _cache_dir(name: str) -> Path:
     return root() / ("models--" + MODELS[name]["repo"].replace("/", "--"))
 
@@ -35,6 +48,8 @@ def _cache_dir(name: str) -> Path:
 def is_downloaded(name: str) -> bool:
     if name not in MODELS:
         return False
+    if bundled(name):
+        return True
     return any(p.is_file() for p in (_cache_dir(name) / "snapshots").glob("*/model.bin"))
 
 

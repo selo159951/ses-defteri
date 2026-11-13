@@ -12,7 +12,7 @@ from backend import export  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
-    monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path))
+    monkeypatch.setenv("SESDEFTERIBASIT_HOME", str(tmp_path))
 
 
 JOB = {

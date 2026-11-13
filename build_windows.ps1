@@ -1,31 +1,16 @@
-# Build the Windows app.
-#   .\build_windows.ps1        -> dist\SesDefteri.zip          (any PC: CPU, plus AMD/Intel/NVIDIA GPUs via Vulkan)
-#   .\build_windows.ps1 -Gpu   -> also dist\SesDefteri-NVIDIA.zip (adds CUDA libraries: fastest on NVIDIA, ~1.4 GB)
-# Vulkan needs vendor\whispercpp (run tools\build_whispercpp.ps1 once); without it the build is CPU/CUDA only.
-param([switch]$Gpu)
+# Build the simple app: .\build_windows.ps1  ->  Desktop\SesDefteri-Basit (folder) and Desktop\SesDefteri-Basit.zip
+# One package for every PC: runs on the processor, the speech model is inside (nothing to download).
+# Uses the Python environment of the full project next to it (..\meet_speech_to_text\.venv).
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-if (-not (Test-Path .venv)) { py -3.12 -m venv .venv }
-.\.venv\Scripts\pip install -q -r requirements.txt pyinstaller
-.\.venv\Scripts\python fetch_models.py
-if (-not (Test-Path vendor\whispercpp\whisper-cli.exe)) { Write-Warning "vendor\whispercpp missing: this build has no Vulkan (AMD/Intel) support" }
-.\.venv\Scripts\pyinstaller --noconfirm --clean SesDefteri.spec
-Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri.zip SesDefteri; Pop-Location
-
-if ($Gpu) {
-    .\.venv\Scripts\pip install -q -r requirements-gpu.txt
-    $dst = "dist\SesDefteri-NVIDIA"
-    if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
-    Copy-Item -Recurse dist\SesDefteri $dst
-    # the app looks for <app>\_internal\nvidia\*\bin\*.dll at start-up
-    foreach ($pkg in "cublas", "cudnn", "cuda_nvrtc") {
-        $src = ".venv\Lib\site-packages\nvidia\$pkg\bin"
-        if (Test-Path $src) {
-            $to = "$dst\_internal\nvidia\$pkg\bin"
-            New-Item -ItemType Directory -Force $to | Out-Null
-            Copy-Item "$src\*.dll" $to
-        }
-    }
-    Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-NVIDIA.zip SesDefteri-NVIDIA; Pop-Location  # Windows' own tar writes real zip files (Git's tar.exe would not)
-}
-Write-Host "Done. Share the .zip files in dist\ (unzip, run SesDefteri.exe)"
+$py = Join-Path $PSScriptRoot "..\meet_speech_to_text\.venv\Scripts"
+if (-not (Test-Path "models\whisper-large-v3-turbo\model.bin")) { throw "models\whisper-large-v3-turbo is missing (the bundled speech model)" }
+& "$py\pyinstaller.exe" --noconfirm --clean SesDefteri.spec
+$desk = [Environment]::GetFolderPath("Desktop")
+$out = Join-Path $desk "SesDefteri-Basit"
+if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+Copy-Item -Recurse dist\SesDefteri $out
+$zip = Join-Path $desk "SesDefteri-Basit.zip"
+if (Test-Path $zip) { Remove-Item -Force $zip }
+Push-Location $desk; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
+Write-Host "Done: $out (open SesDefteri.exe) and $zip"

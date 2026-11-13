@@ -133,13 +133,6 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
         status["progress"] = b / duration
         push(part=i + 1)
     asr_secs = time.time() - t_asr
-    try:  # the user's glossary: names and terms the model spells wrong
-        from . import glossary
-
-        words, gloss_changes = glossary.apply(words)
-    except Exception:
-        traceback.print_exc()
-        gloss_changes = []
     language = langs.most_common(1)[0][0] if langs else None
 
     status["stage"] = "diarizing"
@@ -159,41 +152,16 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     segments = build_segments(words, turns, speakers=spk, margins=margins or None)
 
     n = len({s["speaker"] for s in segments}) or 1
-    speakers = {str(i): f"Speaker {i + 1}" for i in range(n)}
-    from . import names
-    from .names import detect_names
-
-    for k, name in detect_names(segments, speakers).items():
-        speakers[str(k)] = name
-    from . import people  # ---- people: saved voices override the guesses (free when nobody is saved)
-
-    voices = people.apply_to_job(samples, segments, speakers)
-    # people are learned only after the recording is saved (the audio file is needed): remember who introduced themselves
-    intros = names.detect_intros(segments) if asr.get_settings().get("learn_people", True) else {}
+    speakers = {str(i): f"Speaker {i + 1}" for i in range(n)}  # simple app: no name finding, no saved voices
     timings = {"audio": round(duration, 1), "device": device, "parallel": parallel,
                "decode": round(t_decoded - t_start, 1), "asr": round(asr_secs, 1),
                "diar": round(diar["secs"] + (time.time() - t_ref), 1), "total": round(time.time() - t_start, 1)}
     from . import benchmarks
 
-    benchmarks.record(timings, resumed=resume)  # feeds the ETA estimates
+    benchmarks.record(timings, resumed=resume)  # feeds the remaining-time estimates
     store.update_job(
         job_id, status="done", stage="done", progress=1.0, dprogress=1.0, segments=segments,
-        mixed=asr.language_mode() == "mixed", glossary_changes=gloss_changes,
-        speakers=speakers, timings=timings, **voices,
+        mixed=False, glossary_changes=[], speakers=speakers, timings=timings,
         # frozen copy of the model output for the "Original" export
         original_segments=[{k: s[k] for k in ("start", "end", "speaker", "text_original")} for s in segments],
     )
-    if intros:  # learn the voices of the people who introduced themselves (never fails the recording)
-        try:
-            mine = {k: v for k, v in intros.items() if speakers.get(str(k)) == v}
-            if mine:
-                store.update_job(job_id, learned=people.learn_from_job(job_id, mine))
-        except Exception:
-            traceback.print_exc()
-    try:  # meeting mode: analyse right away; this must never fail a transcription
-        if asr.get_settings().get("meeting_mode"):
-            from . import analysis
-
-            analysis.start(job_id)
-    except Exception:
-        traceback.print_exc()

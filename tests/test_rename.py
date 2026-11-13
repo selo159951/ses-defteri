@@ -21,7 +21,7 @@ def test_data_dir_sesdefteri_home_wins(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     monkeypatch.setenv("MEETTRANSCRIBER_HOME", str(tmp_path / "oldest_home"))
     monkeypatch.setenv("KATIP_HOME", str(tmp_path / "katip_home"))
-    monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("SESDEFTERIBASIT_HOME", str(tmp_path / "home"))
     assert store.data_dir() == tmp_path / "home"
     assert (tmp_path / "home").is_dir()
 
@@ -150,7 +150,7 @@ def test_migrate_removes_leftover_tmp(tmp_path, monkeypatch):
     assert not (appdata / "SesDefteri" / "stale.txt").exists()
 
 
-@pytest.mark.parametrize("env", ["SESDEFTERI_HOME", "KATIP_HOME", "MEETTRANSCRIBER_HOME"])
+@pytest.mark.parametrize("env", ["SESDEFTERIBASIT_HOME", "KATIP_HOME", "MEETTRANSCRIBER_HOME"])
 def test_migrate_skipped_when_a_home_variable_is_set(tmp_path, monkeypatch, env):
     appdata = tmp_path / "appdata"
     (appdata / "Katip").mkdir(parents=True)

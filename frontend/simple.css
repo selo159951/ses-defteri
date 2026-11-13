@@ -1,0 +1,42 @@
+/* Ses Defteri Basit: only drop -> process -> list -> read/listen -> export.
+   Everything else of the full app is hidden here (and switched off in the backend). */
+
+/* hidden features */
+#peopleBtn, #sysBtn, #aboutBtn, #langSel,
+#home .meetmode, #home .meetmodehint, #home .langmode, #jStatus, #jLang,
+#undoBtn, #helpBtn, #jobTabs, #reviewBar, #repToggle, #repBox, #fMenu, #fSpk,
+#view .spkmore, #view .spkbtns, #view .learnedline, .seg .actions,
+.menu label:has(#expVersion), #expAnalysisHint, #creditsLine { display: none !important; }
+.badge.done, .badge.analysis { display: none; }
+::highlight(lc-mid), ::highlight(lc-low) { background-color: transparent; }
+.seg.rv-mid, .seg.rv-low { box-shadow: none; }
+.seg.edited .txt, .seg.added .txt { border-left: 0; padding-left: 0; }
+
+/* bigger and calmer for people who rarely use a computer */
+body { font-size: 18px; }
+header h1 { font-size: 24px; }
+#drop { padding: 56px 24px; border-width: 3px; border-radius: 18px; }
+#drop .big { font-size: 28px; font-weight: 600; margin-bottom: 18px; }
+#drop .pickbtn { font-size: 22px; padding: 14px 34px; border-radius: 12px; background: var(--accent); color: #fff; border: 0; cursor: pointer; }
+#drop .pickbtn:hover { filter: brightness(1.08); }
+#drop .simplehint { margin-top: 16px; color: var(--muted); font-size: 17px; }
+#progress { font-size: 20px; }
+#progress .bar { height: 16px; border-radius: 8px; }
+.listhead h2 { font-size: 22px; }
+#jq { font-size: 18px; padding: 10px 14px; min-width: 320px; }
+#jSort { font-size: 18px; padding: 9px 10px; }
+
+/* recordings as big cards, like a video list */
+#jobs li { padding: 16px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); margin-bottom: 12px; list-style: none; }
+#jobs li a { font-size: 20px; font-weight: 600; }
+#jobs li .small, #jobs li button { font-size: 16px; padding: 7px 14px; }
+
+/* recording page */
+#title { font-size: 22px; }
+.seg .txt { font-size: 18px; line-height: 1.55; }
+#speakers input { font-size: 17px; }
+.toolbar details.menu > summary { font-size: 18px; padding: 9px 18px; background: var(--accent); color: #fff; border-radius: 10px; border: 0; }
+#expGo { font-size: 18px; padding: 10px 18px; }
+#player button, #player select { font-size: 17px; }
+.seg select { width: 100%; min-width: 0; font-size: 15px; padding-left: 6px; padding-right: 2px; }
+#title { overflow-wrap: anywhere; }

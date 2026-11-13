@@ -36,8 +36,8 @@ def get_settings() -> dict:
     s.setdefault("use_gpu", True)
     if not s.get("engine"):  # older versions only had the GPU on/off switch
         s["engine"] = "auto" if s["use_gpu"] else "ct2-cpu"
-    if s.get("model") not in models.MODELS:
-        s["model"] = MODEL_NAME if MODEL_NAME in models.MODELS else "large-v3-turbo"
+    # simple app: one bundled model, engine picked by the hardware, no options
+    s.update(model="large-v3-turbo", engine="auto", language="auto", meeting_mode=False, learn_people=False, ui_lang="tr")
     return s
 
 

@@ -14,9 +14,9 @@ _lock = threading.RLock()  # re-entrant: update_job holds it across read + write
 _log = logging.getLogger(__name__)
 
 
-APP_DIR = "SesDefteri"
+APP_DIR = "SesDefteriBasit"  # its own folder: the full Ses Defteri is never touched
 # the older names still work, so existing scripts and data keep working
-HOME_ENVS = ("SESDEFTERI_HOME", "KATIP_HOME", "MEETTRANSCRIBER_HOME")
+HOME_ENVS = ("SESDEFTERIBASIT_HOME",)
 
 
 def _home_override() -> str | None:
@@ -40,6 +40,7 @@ def migrate_old_data() -> bool:
     %APPDATA%\\Katip (the previous name) is renamed: instant, and the models in it are several GB.
     If that folder is in use, or only the oldest %APPDATA%\\MeetTranscriber exists, it is copied
     instead and the old folder is left as it was."""
+    return False  # the simple app starts empty and never takes another version's data
     if _home_override():
         return False
     appdata = Path(os.environ.get("APPDATA", Path.home()))

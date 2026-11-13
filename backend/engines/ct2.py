@@ -81,7 +81,8 @@ class CT2Engine:
         from faster_whisper import WhisperModel
 
         models.root().mkdir(parents=True, exist_ok=True)
-        return WhisperModel(models.MODELS[model]["repo"] if model in models.MODELS else model,
+        local = models.bundled(model)
+        return WhisperModel(str(local) if local else (models.MODELS[model]["repo"] if model in models.MODELS else model),
                             device=device, compute_type=compute, download_root=str(models.root()))
 
     def load(self, model: str, progress: Callable[[float], None] | None = None) -> None:
