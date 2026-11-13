@@ -7,10 +7,27 @@ Her şey bilgisayarının içinde olur. İnternet gerekmez, hiçbir şey dışar
 AÇMAK
 1. Program zip olarak geldiyse: zip dosyasına sağ tıkla, "Tümünü ayıkla" de. Sonra açılan klasörü aç.
 2. "SesDefteri-Basit" klasörünün içindeki "SesDefteri.exe" dosyasına çift tıkla.
-3. Mavi bir uyarı çıkarsa ("Windows bilgisayarınızı korudu") korkma. Önce "Ek bilgi"ye,
+3. Mavi bir uyarı çıkarsa ("Windows bilgisayarınızı korudu") korkma. Önce "Daha fazla bilgi"ye,
    sonra "Yine de çalıştır"a tıkla. Bu sadece ilk seferde çıkar.
 4. İpucu: SesDefteri.exe'ye sağ tıkla, "Gönder", sonra "Masaüstü (kısayol oluştur)" de.
    Böylece program masaüstünde durur.
+
+İLK AÇILIŞTA MAVİ UYARI ÇIKARSA (Windows SmartScreen)
+Program yeni olduğu için Windows "Windows bilgisayarınızı korudu" diye mavi bir pencere gösterebilir.
+Program güvenlidir, bilgisayarında kalır, internete bir şey göndermez.
+1. Mavi pencerede "Daha fazla bilgi" yazısına tıkla.
+2. Altta çıkan "Yine de çalıştır" düğmesine bas.
+3. Bu sadece ilk seferde çıkar. Antivirüs programın da sorarsa "izin ver" de.
+
+PROGRAM AÇILMIYORSA
+- Zip'i önce klasöre çıkar: Zip dosyasının içinden çift tıklayıp açmaya çalışma, açılmaz.
+  Zip'e sağ tıkla, "Tümünü ayıkla" de, açılan klasörün içinden aç.
+- Klasörü Windows'un geçici klasörlerine ya da zip'in içine koyma. Masaüstü ya da Belgeler iyidir.
+- Ekranda Türkçe bir uyarı çıkarsa, orada yazanı yap (örneğin "Edge WebView2" kurmak gerekebilir).
+- Bu program Windows 10 ya da Windows 11 (64 bit) ister. Çok eski bilgisayarlarda çalışmaz.
+- Bilgisayarın belleği (RAM) 4 GB ise program yavaş olabilir. Diğer programları kapat.
+- Yine olmuyorsa şu klasördeki en yeni dosyayı programı veren kişiye gönder:
+  Windows tuşu + R, "%APPDATA%\SesDefteriBasit\logs" yaz, Enter.
 
 BİR KAYDI YAZIYA DÖKMEK
 1. Pencerede büyük bir alan var: "Videoyu ya da ses kaydını buraya sürükleyip bırak".

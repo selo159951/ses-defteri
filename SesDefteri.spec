@@ -20,6 +20,18 @@ for pkg in ("faster_whisper", "ctranslate2", "sherpa_onnx", "onnxruntime", "av",
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
 
+# Visual C++ runtime: always inside the package so a PC without the "VC++ Redistributable" still works
+# (ctranslate2, onnxruntime, sherpa-onnx, av and Python itself import these).
+import sys as _sys
+_vc_dirs = [_sys.base_prefix, os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")]
+for _n in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll",
+           "concrt140.dll", "vcomp140.dll"):
+    for _d in _vc_dirs:
+        _p = os.path.join(_d, _n)
+        if os.path.isfile(_p):
+            binaries.append((_p, "."))
+            break
+
 # simple app: no whisper.cpp (Vulkan) and no llama.cpp runtimes, it runs on the processor
 
 a = Analysis(

@@ -9,7 +9,7 @@ from typing import Callable
 
 import numpy as np
 
-from .. import models
+from .. import compat, models
 from ..merge import Word
 
 
@@ -82,8 +82,34 @@ class CT2Engine:
 
         models.root().mkdir(parents=True, exist_ok=True)
         local = models.bundled(model)
+        extra = {"cpu_threads": compat.cpu_threads(os.cpu_count())} if device == "cpu" else {}
         return WhisperModel(str(local) if local else (models.MODELS[model]["repo"] if model in models.MODELS else model),
-                            device=device, compute_type=compute, download_root=str(models.root()))
+                            device=device, compute_type=compute, download_root=str(models.root()), **extra)
+
+    def _create_cpu(self, model: str):
+        """CPU model with a fallback chain (int8 -> int8_float32 -> float32): the first compute type this
+        processor accepts wins. Memory or other failures end as one readable error."""
+        try:
+            import ctranslate2
+
+            supported = ctranslate2.get_supported_compute_types("cpu")
+        except Exception:
+            supported = None
+        chain = compat.compute_chain(supported)
+        if self.compute in chain:  # a caller's choice goes first
+            chain = [self.compute] + [c for c in chain if c != self.compute]
+        last: BaseException | None = None
+        for comp in chain:
+            try:
+                m = self._create(model, "cpu", comp)
+                self.compute = comp
+                return m
+            except Exception as e:  # MemoryError is an Exception too
+                print(f"compute type {comp} failed:", e)
+                last = e
+                if compat.is_memory_error(e):
+                    break  # a bigger compute type needs even more memory
+        raise RuntimeError(compat.friendly_error(last)) from last
 
     def load(self, model: str, progress: Callable[[float], None] | None = None) -> None:
         with self._lock:
@@ -100,7 +126,7 @@ class CT2Engine:
                     self.error = str(e)
                     mark_cuda_broken(self.error)
                     self.device, self.compute = "cpu", "int8"
-            self._model = self._create(model, "cpu", "int8")
+            self._model = self._create_cpu(model)
 
     def vote_languages(self, samples: np.ndarray, windows: int = 12) -> list[tuple[str, float]]:
         """Which languages are spoken in the WHOLE recording: the language is detected in up to 12 evenly
@@ -136,6 +162,15 @@ class CT2Engine:
 
     def transcribe(self, samples: np.ndarray, duration: float,
                    progress: Callable[[float], None]) -> tuple[list[Word], str]:
+        try:
+            return self._transcribe(samples, duration, progress)
+        except Exception as e:
+            if compat.is_memory_error(e):
+                raise RuntimeError(compat.friendly_error(e)) from e
+            raise
+
+    def _transcribe(self, samples: np.ndarray, duration: float,
+                    progress: Callable[[float], None]) -> tuple[list[Word], str]:
         from .. import asr
 
         mode = asr.language_mode()
