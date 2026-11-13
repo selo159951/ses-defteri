@@ -18,12 +18,12 @@ def convert(src: Path, playback_mp3: Path | None, progress=None) -> tuple[np.nda
     chunks: list[np.ndarray] = []
     try:
         inp = av.open(str(src))
-    except av.error.FFmpegError:
-        raise ValueError("This file is not a supported audio/video format") from None
+    except (av.error.FFmpegError, OSError):
+        raise ValueError("Bu dosya okunamadı: desteklenen bir ses ya da video dosyası değil") from None
     with inp:
         stream = next((s for s in inp.streams if s.type == "audio"), None)
         if stream is None:
-            raise ValueError("This file has no audio track")
+            raise ValueError("Bu dosyada ses yok")
         res16 = av.AudioResampler(format="s16", layout="mono", rate=16000)
         with (av.open(str(playback_mp3), "w") if playback_mp3 else nullcontext()) as out:
             ostream = None
@@ -52,6 +52,6 @@ def convert(src: Path, playback_mp3: Path | None, progress=None) -> tuple[np.nda
                 for pkt in ostream.encode(None):
                     out.mux(pkt)
     if not chunks:
-        raise ValueError("No audio found in file")
+        raise ValueError("Dosyada ses bulunamadı")
     pcm = np.concatenate(chunks).astype(np.float32) / 32768.0
     return pcm, len(pcm) / 16000.0

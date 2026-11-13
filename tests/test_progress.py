@@ -285,3 +285,152 @@ def test_progress_ui_wiring():
                    "Dosya hazırlanıyor", "Ses tanıma modeli yükleniyor", "Konuşmalar yazıya dökülüyor",
                    "Konuşmacılar ayrılıyor", "Bitti", "İlk seferde 1-2 dakika sürebilir", "bölüm"):
         assert needle in js
+
+
+# ---------------- several files at once ----------------
+@pytest.fixture
+def recorder(fakes, monkeypatch):
+    """Fake engine that records the order of the jobs and how many run at the same time."""
+    from backend import audio
+
+    class R:
+        order, live, peak = [], 0, 0
+        lock = threading.Lock()
+        fail = set()
+        slow = 0.05
+
+    r = R()
+    r.order, r.lock, r.fail = [], threading.Lock(), set()
+    real = audio.convert
+
+    def convert(src, mp3, progress=None):
+        with r.lock:
+            r.live += 1
+            r.peak = max(r.peak, r.live)
+            r.order.append(Path(src).name)
+        try:
+            time.sleep(r.slow)
+            if Path(src).name in r.fail:
+                raise ValueError("bozuk dosya")
+            return real(src, mp3, progress)
+        finally:
+            with r.lock:
+                r.live -= 1
+
+    monkeypatch.setattr(audio, "convert", convert)
+    monkeypatch.setattr(audio, "decode", lambda p: (np.zeros(16000 * 30, dtype=np.float32), 30.0))
+    return r
+
+
+def start_many(tmp_path, names):
+    from backend import bridge
+
+    api = bridge.Api(lambda: None)
+    paths = []
+    for n in names:
+        p = tmp_path / n
+        p.write_bytes(b"x")
+        paths.append(str(p))
+    return api, api.start_jobs(paths)
+
+
+def all_idle(ids):
+    from backend import pipeline
+
+    return wait(lambda: not any(pipeline.is_active(i) for i in ids), 20)
+
+
+def test_many_jobs_run_in_submission_order_one_at_a_time(tmp_path, recorder):
+    names = [f"f{i}.wav" for i in range(6)]
+    api, res = start_many(tmp_path, names)
+    ids = [r["id"] for r in res]
+    assert all_idle(ids)
+    assert recorder.order == names and recorder.peak == 1
+    assert all(api.get_job(i)["status"] == "done" for i in ids)
+
+
+def test_queue_listing_and_cancel_of_a_queued_middle_job(tmp_path, recorder):
+    recorder.slow = 0.4
+    api, res = start_many(tmp_path, ["a.wav", "b.wav", "c.wav"])
+    a, b, c = (r["id"] for r in res)
+    assert wait(lambda: api.get_queue()["running"] and api.get_queue()["running"]["id"] == a)
+    assert [x["id"] for x in api.get_queue()["queued"]] == [b, c]
+    assert api.cancel_job(b)["ok"]
+    assert all_idle([a, b, c])
+    assert recorder.order == ["a.wav", "c.wav"]
+    assert not store.job_path(b).exists() and api.get_job(c)["status"] == "done"
+
+
+def test_pause_running_lets_next_start_and_resume_goes_to_the_end(tmp_path, recorder, fakes):
+    fakes.hold_part = 0
+    api, res = start_many(tmp_path, ["a.wav", "b.wav", "c.wav"])
+    a, b, c = (r["id"] for r in res)
+    assert fakes.reached.wait(5)
+    api.pause_job(a)
+    fakes.gate.set()
+    fakes.hold_part = None
+    assert wait(lambda: api.get_job(a)["status"] == "paused")
+    api.resume_job(a)  # b and c are still ahead of it
+    assert all_idle([a, b, c])
+    assert recorder.order == ["a.wav", "b.wav", "c.wav"]
+    assert [api.get_job(i)["status"] for i in (a, b, c)] == ["done"] * 3
+    # the resumed a started its second run after c's run began: it went to the end of the line
+    assert api.get_job(a)["run_started"] > api.get_job(c)["run_started"] and recorder.peak == 1
+
+
+def test_failing_job_does_not_stop_the_queue(tmp_path, recorder):
+    recorder.fail = {"bad.wav"}
+    api, res = start_many(tmp_path, ["a.wav", "bad.wav", "c.wav"])
+    ids = [r["id"] for r in res]
+    assert all_idle(ids)
+    st = [api.get_job(i) for i in ids]
+    assert [j["status"] for j in st] == ["done", "error", "done"]
+    assert "bozuk" in st[1]["error"]
+
+
+def test_same_file_twice_and_same_name_get_separate_jobs(tmp_path, recorder):
+    d2 = tmp_path / "other"
+    d2.mkdir()
+    (tmp_path / "x.wav").write_bytes(b"x")
+    (d2 / "x.wav").write_bytes(b"y")
+    from backend import bridge
+
+    api = bridge.Api(lambda: None)
+    res = api.start_jobs([str(tmp_path / "x.wav"), str(tmp_path / "x.wav"), str(d2 / "x.wav")])
+    ids = [r["id"] for r in res]
+    assert len(set(ids)) == 3 and all_idle(ids)
+    assert len({store.job_path(i) for i in ids}) == 3
+    assert all((store.job_path(i) / "audio.mp3").exists() and api.get_job(i)["status"] == "done" for i in ids)
+
+
+def test_folder_and_non_media_are_skipped_with_a_message(tmp_path, recorder):
+    from backend import bridge
+
+    (tmp_path / "klasor").mkdir()
+    (tmp_path / "not.txt").write_text("x")
+    (tmp_path / "ok.wav").write_bytes(b"x")
+    api = bridge.Api(lambda: None)
+    res = api.start_jobs([str(tmp_path / "klasor"), str(tmp_path / "not.txt"), str(tmp_path / "yok.wav"), str(tmp_path / "ok.wav")])
+    assert [bool(r.get("skipped")) for r in res] == [True, True, True, False]
+    assert "klasör" in res[0]["error"] and "ses ya da video" in res[1]["error"]
+    assert all_idle([res[3]["id"]]) and len(api.list_jobs()) == 1
+
+
+def test_concurrent_update_job_keeps_every_field_and_valid_file(tmp_path):
+    jid = store.create_job("c.wav")
+    N, T = 40, 8
+
+    def work(t):
+        for i in range(N):
+            store.update_job(jid, **{f"f_{t}_{i}": i})
+            if i % 10 == 0:
+                store.list_jobs()
+                store.rename_job(jid, f"name{t}")
+
+    ths = [threading.Thread(target=work, args=(t,)) for t in range(T)]
+    [t.start() for t in ths]
+    [t.join() for t in ths]
+    d = store.read_transcript(jid)
+    assert sum(1 for k in d if k.startswith("f_")) == N * T
+    assert d["id"] == jid and d["segments"] == []
+    assert [p.name for p in store.job_path(jid).iterdir()] == ["transcript.json"]  # no temp files left

@@ -96,6 +96,11 @@ function jobRow(j, q) {
   const del = el("button", { textContent: t("delete"), className: "small" });
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
   const btns = el("div", { className: "jbtns" }, ren, del);
+  if (j.status === "queued") { // waiting in line: nothing is done yet, so "İptal" instead of "Sil"
+    const can = el("button", { textContent: "İptal", className: "small" });
+    can.onclick = () => cancelQueued(j.id);
+    del.replaceWith(can);
+  }
   if (j.status === "interrupted" || j.status === "paused") {
     const res = el("button", { textContent: t("resume"), className: "small primary" });
     res.onclick = () => resume(j.id);
@@ -108,20 +113,79 @@ for (const id of ["jStatus", "jLang", "jSort"]) $(id).onchange = loadJobs;
 
 /* Files are read from disk by path: dropped files are handled by Python (it gets the full path),
    "browse" opens the native Open dialog. Both end up in onJobStarted. */
-window.onJobStarted = (r) => { if (r && r.id) watch(r.id, r.filename); };
-window.onJobError = (msg) => { watching = null; $("progress").hidden = false; window.showProgressError(t("upload_failed") + msg); };
+let watching = null, watchState = "", batch = 0, lastQueueSig = "";
+const DEAD = ["paused", "error", "interrupted", "done"];
+window.onJobStarted = (r) => {
+  if (!r || !r.id) return;
+  batch++;
+  // do not take the box away from a recording that is really running: the box follows the running one
+  if (watching === null || watching === r.id || DEAD.includes(watchState)) watch(r.id, r.filename);
+  else loadJobs();
+};
+/* several files at once (drop or picker): the list comes back in the order they were started */
+window.onJobsStarted = (list) => {
+  const bad = (list || []).filter((r) => r.skipped);
+  (list || []).filter((r) => r.id).forEach(window.onJobStarted);
+  if (bad.length) showNote(bad.map((r) => r.error).join("\n"));
+  loadJobs();
+};
+function showNote(text) {
+  const n = $("pnote");
+  n.textContent = text;
+  n.hidden = false;
+  clearTimeout(showNote.t);
+  showNote.t = setTimeout(() => { n.hidden = true; }, 9000);
+}
+window.onJobError = (msg) => {
+  if (watching !== null && !DEAD.includes(watchState)) return showNote(t("upload_failed") + msg);
+  watching = null; $("progress").hidden = false; window.showProgressError(t("upload_failed") + msg);
+};
 async function browse() {
-  try { const r = await call("pick_and_start"); if (!r.cancelled) onJobStarted(r); } catch (e) { onJobError(e.message || e); }
+  try { const r = await call("pick_and_start"); window.onJobsStarted(Array.isArray(r) ? r : r && r.id ? [r] : []); } catch (e) { onJobError(e.message || e); }
 }
 
 async function resume(id) {
   try { onJobStarted(await call("resume_job", id)); } catch (e) { onJobError(e.message || e); }
 }
 
-let watching = null;
-/* The progress box itself (steps, buttons, texts) is drawn by renderProgress() in simple-progress.js. */
+async function cancelQueued(id) {
+  try { await call("cancel_job", id); } catch (e) { alert(e.message || e); }
+  [0, 700, 2000].forEach((ms) => setTimeout(() => { loadJobs(); pollQueue(); }, ms));
+}
+window.cancelQueued = cancelQueued;
+
+/* "Sırada bekleyenler (2): a.mp4, b.wav" under the progress box, each with a small İptal */
+function renderQueue(q) {
+  const box = $("pqueue"), items = q.queued || [];
+  box.hidden = !items.length;
+  if (!items.length) return box.replaceChildren();
+  const parts = [el("span", { textContent: `Sırada bekleyenler (${items.length}): ` })];
+  items.forEach((it, i) => {
+    const b = el("button", { type: "button", className: "qcancel", textContent: "İptal", title: it.filename + " sıradan çıkarılsın" });
+    b.onclick = () => cancelQueued(it.id);
+    parts.push(el("span", { className: "qitem" }, it.filename + " ", b), i < items.length - 1 ? ", " : "");
+  });
+  box.replaceChildren(...parts);
+}
+
+/* keeps the queue line and the list fresh, and gives the box back to the running recording
+   (for instance after the one in the box was cancelled) */
+async function pollQueue() {
+  let q;
+  try { q = await call("get_queue"); } catch (e) { return; }
+  const sig = (q.running?.id || "") + "|" + (q.queued || []).map((x) => x.id).join(",");
+  if (sig !== lastQueueSig) { lastQueueSig = sig; loadJobs(); }
+  renderQueue(q);
+  if (!q.running && !(q.queued || []).length && watching === null) batch = 0;
+  if (watching === null && q.running) watch(q.running.id, q.running.filename);
+}
+setInterval(pollQueue, 1500);
+
+/* The progress box itself (steps, buttons, texts) is drawn by renderProgress() in simple-progress.js.
+   It follows the recording that is really running: a queued one hands over to the running one, and when the
+   running one finishes the box moves on to the next without opening the finished page. */
 function watch(id, name) {
-  watching = id;
+  watching = id; watchState = "";
   $("progress").hidden = false;
   window.progressStart(id, name);
   const tick = async () => {
@@ -132,12 +196,31 @@ function watch(id, name) {
       return setTimeout(tick, 2000);
     }
     if (watching !== id) return;
-    if (j.status === "done") { $("progress").hidden = true; loadJobs(); return openJob(id); }
+    watchState = j.status;
+    if (j.status === "queued") {
+      let q = null;
+      try { q = await call("get_queue"); } catch (e) { /* try again next second */ }
+      if (watching !== id) return;
+      if (q?.running && q.running.id !== id) return watch(q.running.id, q.running.filename);
+    }
+    if (j.status === "done") return finished(id);
     window.renderProgress(j, name);
     if (["error", "paused", "interrupted"].includes(j.status)) return loadJobs();
     setTimeout(tick, 1000);
   };
   tick();
+}
+
+async function finished(id) {
+  loadJobs();
+  let q = { queued: [] };
+  try { q = await call("get_queue"); } catch (e) { /* treat as empty */ }
+  const next = q.running || (q.queued || [])[0];
+  if (next) return watch(next.id, next.filename); // more are waiting: go on, do not jump into the finished page
+  const n = batch;
+  batch = 0; watching = null; watchState = "";
+  $("progress").hidden = true; $("pqueue").hidden = true;
+  if (n <= 1) openJob(id); // one file in this round: show it as before
 }
 
 /* ================= transcript state ================= */

@@ -112,10 +112,20 @@ def read_transcript(job_id: str) -> dict:
 
 def write_transcript(job_id: str, data: dict) -> None:
     p = job_path(job_id) / "transcript.json"
-    tmp = p.with_suffix(".tmp")
+    tmp = p.with_name(f"transcript.{uuid.uuid4().hex[:8]}.tmp")  # never shared between writers
     with _lock:
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
-        os.replace(tmp, p)
+        try:
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+            for attempt in range(10):  # Windows: a reader holding the file open makes replace fail for a moment
+                try:
+                    os.replace(tmp, p)
+                    return
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.02)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def update_job(job_id: str, **fields) -> dict:
@@ -162,7 +172,8 @@ def list_jobs(q: str = "") -> list[dict]:
         if not f.exists():
             continue
         try:
-            d = json.loads(f.read_text("utf-8"))
+            with _lock:
+                d = json.loads(f.read_text("utf-8"))
         except Exception:
             continue
         segs = d.get("segments") or []
@@ -199,33 +210,36 @@ def rename_job(job_id: str, name: str) -> dict:
 
 
 def delete_job(job_id: str) -> None:
-    shutil.rmtree(job_path(job_id), ignore_errors=True)
+    with _lock:
+        shutil.rmtree(job_path(job_id), ignore_errors=True)
 
 
 def split(job_id: str, seg_id: int, a: int, b: int, speaker: int) -> dict:
-    from .merge import split_segment
+    with _lock:  # read-modify-write: no other thread may write in between
+        from .merge import split_segment
 
-    data = read_transcript(job_id)
-    segs = data["segments"]
-    idx = next((i for i, s in enumerate(segs) if s["id"] == seg_id), None)
-    if idx is None:
-        raise KeyError(seg_id)
-    next_id = max(s["id"] for s in segs) + 1
-    segs[idx:idx + 1] = split_segment(segs[idx], a, b, speaker, next_id)
-    data["speakers"].setdefault(str(speaker), f"Speaker {speaker + 1}")
-    write_transcript(job_id, data)
-    return data
+        data = read_transcript(job_id)
+        segs = data["segments"]
+        idx = next((i for i, s in enumerate(segs) if s["id"] == seg_id), None)
+        if idx is None:
+            raise KeyError(seg_id)
+        next_id = max(s["id"] for s in segs) + 1
+        segs[idx:idx + 1] = split_segment(segs[idx], a, b, speaker, next_id)
+        data["speakers"].setdefault(str(speaker), f"Speaker {speaker + 1}")
+        write_transcript(job_id, data)
+        return data
 
 
 def apply_detected_names(job_id: str) -> tuple[dict, dict]:
     """Fill in names for speakers that still have a default 'Speaker N' label."""
-    from .names import detect_names
+    with _lock:  # read-modify-write: no other thread may write in between
+        from .names import detect_names
 
-    data = read_transcript(job_id)
-    found = detect_names(data["segments"], data["speakers"])
-    data["speakers"].update({str(k): v for k, v in found.items()})
-    write_transcript(job_id, data)
-    return data, found
+        data = read_transcript(job_id)
+        found = detect_names(data["segments"], data["speakers"])
+        data["speakers"].update({str(k): v for k, v in found.items()})
+        write_transcript(job_id, data)
+        return data, found
 
 
 def replace_transcript(job_id: str, segments: list[dict], speakers: dict) -> dict:
@@ -234,29 +248,30 @@ def replace_transcript(job_id: str, segments: list[dict], speakers: dict) -> dic
     text_original and word timings of known segments are kept from disk, so the
     model's output can't be changed from the UI; new lines have no original text.
     """
-    data = read_transcript(job_id)
-    old = {s["id"]: s for s in data["segments"]}
-    out, seen = [], set()
-    for s in segments:
-        sid = int(s["id"])
-        if sid in seen:
-            raise ValueError(f"duplicate segment id {sid}")
-        seen.add(sid)
-        prev = old.get(sid, {})
-        start = max(0.0, float(s["start"]))
-        out.append({
-            "id": sid, "start": round(start, 2), "end": round(max(start, float(s["end"])), 2),
-            "speaker": int(s["speaker"]), "text_edited": str(s["text_edited"]),
-            "text_original": prev.get("text_original", s.get("text_original", "")),
-            "words": prev.get("words", s.get("words", [])),
-            # confidence marks of the model's own lines (a line the user gave to another speaker is no longer in doubt)
-            **{k: prev[k] for k in ("conf", "low_words") if k in prev},
-            **({"spk_conf": prev["spk_conf"]} if "spk_conf" in prev and int(s["speaker"]) == prev.get("speaker") else {}),
-        })
-    data["segments"] = sorted(out, key=lambda s: (s["start"], s["id"]))
-    data["speakers"] = {str(k): str(v) for k, v in speakers.items()}
-    write_transcript(job_id, data)
-    return data
+    with _lock:  # read-modify-write: no other thread may write in between
+        data = read_transcript(job_id)
+        old = {s["id"]: s for s in data["segments"]}
+        out, seen = [], set()
+        for s in segments:
+            sid = int(s["id"])
+            if sid in seen:
+                raise ValueError(f"duplicate segment id {sid}")
+            seen.add(sid)
+            prev = old.get(sid, {})
+            start = max(0.0, float(s["start"]))
+            out.append({
+                "id": sid, "start": round(start, 2), "end": round(max(start, float(s["end"])), 2),
+                "speaker": int(s["speaker"]), "text_edited": str(s["text_edited"]),
+                "text_original": prev.get("text_original", s.get("text_original", "")),
+                "words": prev.get("words", s.get("words", [])),
+                # confidence marks of the model's own lines (a line the user gave to another speaker is no longer in doubt)
+                **{k: prev[k] for k in ("conf", "low_words") if k in prev},
+                **({"spk_conf": prev["spk_conf"]} if "spk_conf" in prev and int(s["speaker"]) == prev.get("speaker") else {}),
+            })
+        data["segments"] = sorted(out, key=lambda s: (s["start"], s["id"]))
+        data["speakers"] = {str(k): str(v) for k, v in speakers.items()}
+        write_transcript(job_id, data)
+        return data
 
 
 def _learn(seg: dict, new_text: str) -> None:
@@ -274,16 +289,17 @@ def _learn(seg: dict, new_text: str) -> None:
 def save_edits(job_id: str, edits: dict[int, str] | None = None, speakers: dict | None = None,
                segment_speakers: dict[int, int] | None = None) -> dict:
     """Edits only touch text_edited / speaker labels; text_original is never modified."""
-    data = read_transcript(job_id)
-    by_id = {s["id"]: s for s in data["segments"]}
-    for sid, text in (edits or {}).items():
-        if sid in by_id:
-            _learn(by_id[sid], text)
-            by_id[sid]["text_edited"] = text
-    for sid, spk in (segment_speakers or {}).items():
-        if sid in by_id:
-            by_id[sid]["speaker"] = spk
-    if speakers:
-        data["speakers"].update({str(k): v for k, v in speakers.items()})
-    write_transcript(job_id, data)
-    return data
+    with _lock:  # read-modify-write: no other thread may write in between
+        data = read_transcript(job_id)
+        by_id = {s["id"]: s for s in data["segments"]}
+        for sid, text in (edits or {}).items():
+            if sid in by_id:
+                _learn(by_id[sid], text)
+                by_id[sid]["text_edited"] = text
+        for sid, spk in (segment_speakers or {}).items():
+            if sid in by_id:
+                by_id[sid]["speaker"] = spk
+        if speakers:
+            data["speakers"].update({str(k): v for k, v in speakers.items()})
+        write_transcript(job_id, data)
+        return data

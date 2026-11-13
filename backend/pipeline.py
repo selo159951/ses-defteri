@@ -24,6 +24,8 @@ _stop: dict[str, str] = {}              # job id -> "pause" | "cancel" (asked fo
 _active: set[str] = set()               # jobs that have a run_job thread (queued or running)
 _cancel_events: dict[str, threading.Event] = {}  # lets request_stop stop the speaker separation at once
 _current: dict[str, str | None] = {"id": None}   # the job that holds the queue lock
+_order: list[str] = []                  # waiting jobs, first in first out (the head goes next)
+_order_lock = threading.Lock()
 
 
 class JobStopped(Exception):
@@ -32,6 +34,26 @@ class JobStopped(Exception):
     def __init__(self, mode: str):
         super().__init__(mode)
         self.mode = mode
+
+
+def enqueue(job_id: str) -> None:
+    """Take a place at the end of the line. Called in submission order (before the job's thread is
+    started), which is what makes the processing order first-in-first-out."""
+    with _order_lock:
+        if job_id not in _order:
+            _order.append(job_id)
+
+
+def _leave_line(job_id: str) -> None:
+    with _order_lock:
+        if job_id in _order:
+            _order.remove(job_id)
+
+
+def queue_ids() -> list[str]:
+    """Jobs that are waiting for their turn, in the order they will run (the running one is not in it)."""
+    with _order_lock:
+        return list(_order)
 
 
 def is_active(job_id: str) -> bool:
@@ -68,18 +90,27 @@ def _heartbeat(job_id: str, done: threading.Event) -> None:
 
 
 def _wait_for_turn(job_id: str) -> None:
-    """Take the queue lock; while another recording is processed say which one, and stay stoppable."""
-    announced = False
-    while not _queue_lock.acquire(timeout=0.5):
+    """Wait until this job is first in line and the queue lock is free; say which recording is in front,
+    and stay stoppable (a paused or cancelled queued job just leaves the line)."""
+    announced = None
+    while True:
         _check(job_id)
-        if not announced:
-            announced = True
-            other = _current["id"]
+        with _order_lock:
+            ahead = _order.index(job_id) if job_id in _order else 0
+            front = _order[ahead - 1] if ahead > 0 else None
+            is_head = ahead == 0
+        if is_head and _queue_lock.acquire(timeout=0.2):
+            break
+        if not is_head:
+            time.sleep(0.2)
+        other = front or _current["id"]
+        if other and other != announced:
+            announced = other
             try:
-                name = store.read_transcript(other)["filename"] if other else ""
+                name = store.read_transcript(other)["filename"]
             except Exception:
                 name = ""
-            store.update_job(job_id, waiting_for=name or "?")
+            _safe_update(job_id, waiting_for=name or "?")
     try:
         _check(job_id)
     except BaseException:
@@ -91,12 +122,16 @@ def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: boo
     """keep_source=True: src is the user's own file and must never be deleted."""
     t_start = time.time()
     _active.add(job_id)
+    enqueue(job_id)  # no-op when the caller already did (start_job / resume_job do, to keep the order)
     hb_done = threading.Event()
     held = False
     try:
         _wait_for_turn(job_id)
         held = True
-        _current["id"] = job_id
+        with _order_lock:  # now running: no longer "waiting"
+            _current["id"] = job_id
+            if job_id in _order:
+                _order.remove(job_id)
         threading.Thread(target=_heartbeat, args=(job_id, hb_done), daemon=True).start()
         _run(job_id, src, resume, t_start)
     except JobStopped as e:
@@ -111,6 +146,7 @@ def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: boo
         _safe_update(job_id, status="error", stage="error", error=f"{type(e).__name__}: {e}", waiting_for=None)
     finally:
         hb_done.set()
+        _leave_line(job_id)
         if held:
             _current["id"] = None
             _queue_lock.release()
@@ -174,7 +210,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     else:
         src = src or (Path(job["source_path"]) if job.get("source_path") else None)
         if src is None or not Path(src).is_file():
-            raise ValueError("the original file is missing - add the file again")
+            raise ValueError("Özgün dosya bulunamadı, dosyayı yeniden ekle")
 
         def cprog(p):
             status["cprogress"] = p

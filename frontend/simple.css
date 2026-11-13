@@ -110,3 +110,11 @@ header h1 { font-size: 24px; }
 #psteps { margin: 6px 0; }
 #progress > .bar { margin: 8px 0 6px; }
 #palive { margin-top: 4px; }
+
+/* ---- several files: waiting line and notes ---- */
+#pqueue { margin-top: 14px; font-size: 17px; color: var(--muted, #555); line-height: 1.9; }
+#pqueue .qitem { white-space: nowrap; }
+.qcancel { font: inherit; font-size: 14px; padding: 1px 10px; margin-left: 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: inherit; cursor: pointer; }
+.qcancel:hover { border-color: #c0392b; color: #c0392b; }
+#pnote { white-space: pre-line; background: #fff4e0; border: 1px solid #e0b060; color: #6b4200; border-radius: 12px; padding: 12px 18px; margin: 16px 0 0; font-size: 18px; }
+@media (prefers-color-scheme: dark) { #pnote { background: #3a2c10; border-color: #8a6a28; color: #f0d9a8; } }

@@ -372,7 +372,7 @@ def test_file_without_audio_track_gives_a_clear_error(tmp_path):
                 out.mux(p)
         for p in v.encode(None):
             out.mux(p)
-    with pytest.raises(ValueError, match="no audio"):
+    with pytest.raises(ValueError, match="ses yok"):
         audio.convert(src, None)
 
 
