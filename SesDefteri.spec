@@ -33,7 +33,19 @@ for _n in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1
             binaries.append((_p, "."))
             break
 
-# simple app: no whisper.cpp (Vulkan) and no llama.cpp runtimes, it runs on the processor
+# whisper.cpp Vulkan runtime (onboard Radeon / any Vulkan GPU). The self-test picks it only if it is faster here.
+_wc = "vendor/whispercpp"
+if os.path.isdir(_wc):
+    for f in os.listdir(_wc):
+        binaries.append((os.path.join(_wc, f), "whispercpp"))
+    # whisper-cli.exe is a child process: it does not see the VC++ DLLs in the package root, so put them next to it
+    for _n in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"):
+        for _d in _vc_dirs:
+            _p = os.path.join(_d, _n)
+            if os.path.isfile(_p):
+                binaries.append((_p, "whispercpp"))
+                break
+hiddenimports.append("backend.engines.tuning")
 
 a = Analysis(
     ["app.py"], datas=datas, binaries=binaries, hiddenimports=hiddenimports,

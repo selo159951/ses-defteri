@@ -119,7 +119,9 @@
     const stateOf = (i) => (waiting ? "waiting" : i < cur ? "done" : i === cur ? (paused ? "paused" : "now") : "waiting");
 
     setState(0, stateOf(0), conv > 0 ? `%${pct(conv)}` : "Ses okunuyor, bu birkaç dakika sürebilir", conv > 0 ? conv : null);
-    setState(1, stateOf(1), "İlk seferde 1-2 dakika sürebilir", null);
+    setState(1, stateOf(1), j.stage_note === "selftest"
+      ? "Bu bilgisayar için en hızlı ayar deneniyor. Bu sadece ilk seferde olur, yaklaşık 1 dakika sürer"
+      : "İlk seferde 1-2 dakika sürebilir", null);
     setState(2, stateOf(2), (asr > 0 ? `%${pct(asr)}` : "Başlıyor") + (partTxt ? `  ·  ${partTxt}` : ""), asr > 0 ? asr : null);
     // with a graphics card the speakers are separated at the same time as the text is written
     const diaNow = !waiting && !paused && (cur === 3 || (cur === 2 && dia > 0));
