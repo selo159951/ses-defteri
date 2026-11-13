@@ -14,6 +14,7 @@ button.small { padding:1px 8px; font-size:12px; }
 #drop { border:2px dashed var(--line); border-radius:12px; padding:48px; text-align:center; transition:.15s; }
 #drop.over { border-color:var(--accent); background:var(--card); }
 #drop .big { font-size:18px; margin:0 0 8px; } .link { color:var(--accent); cursor:pointer; text-decoration:underline; }
+#pbtns { display:flex; gap:6px; margin-top:6px; }
 #progress { margin:16px 0; } .bar { height:10px; background:var(--line); border-radius:5px; overflow:hidden; margin:6px 0; }
 #pfill { height:100%; width:0; background:var(--accent); transition:width .4s; }
 #pfill.indeterminate { width:30% !important; animation:slide 1.2s infinite ease-in-out; }
@@ -40,7 +41,7 @@ mark { background:var(--hit); color:inherit; border-radius:2px; padding:0 1px; }
 .helptip { margin-top:12px; max-width:440px; }
 header { padding:8px 24px; gap:10px; }
 .badge { font-size:11px; padding:1px 7px; border-radius:10px; background:var(--line); vertical-align:middle; }
-.badge.done { background:var(--s1); } .badge.error { background:var(--s3); } .badge.running, .badge.queued, .badge.interrupted { background:var(--s2); }
+.badge.done { background:var(--s1); } .badge.error { background:var(--s3); } .badge.running, .badge.queued, .badge.interrupted, .badge.paused { background:var(--s2); }
 button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
 
 /* GPU switch */

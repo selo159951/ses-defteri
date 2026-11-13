@@ -18,6 +18,25 @@ from .merge import Word, assign_speakers, build_segments
 
 SR = 16000
 _queue_lock = threading.Lock()  # one heavy job at a time
+_stop: dict[str, str] = {}  # job id -> "pause" | "cancel", set by request_stop, cleared when the job ends
+
+
+class JobStopped(Exception):
+    """Raised inside a running job when the user paused or cancelled it."""
+
+
+def request_stop(job_id: str, mode: str) -> None:
+    """Ask a running or queued job to stop: mode "pause" keeps its finished parts, "cancel" deletes it."""
+    if mode not in ("pause", "cancel"):
+        raise ValueError("mode must be 'pause' or 'cancel'")
+    if mode == "pause" and _stop.get(job_id) == "cancel":
+        return  # cancel wins
+    _stop[job_id] = mode
+
+
+def _check_stop(job_id: str) -> None:
+    if job_id in _stop:
+        raise JobStopped(_stop[job_id])
 
 
 def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: bool = False) -> None:
@@ -25,18 +44,37 @@ def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: boo
     t_start = time.time()
     try:
         with _queue_lock:
+            _check_stop(job_id)  # a queued job can be paused or cancelled before it starts
             _run(job_id, src, resume, t_start)
-    except ValueError as e:  # user-facing problems (bad file etc.)
-        store.update_job(job_id, status="error", stage="error", error=str(e))
-    except Exception as e:  # surfaced in UI
-        traceback.print_exc()
-        store.update_job(job_id, status="error", stage="error", error=f"{type(e).__name__}: {e}")
+        _stop.pop(job_id, None)
+    except JobStopped:
+        mode = _stop.pop(job_id, "pause")  # flag cleared first: a resume right after must not see it
+        if mode == "cancel":
+            store.delete_job(job_id)
+        else:
+            try:
+                store.update_job(job_id, status="paused")  # stage and progress stay as they were
+            except (OSError, ValueError):
+                pass
+    except Exception as e:
+        if _stop.pop(job_id, None) == "cancel":  # cancelled while failing: no error to show
+            store.delete_job(job_id)
+        else:
+            _fail(job_id, e)
     finally:
         if src is not None and not keep_source:  # only temporary copies are removed
             try:
                 Path(src).unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+def _fail(job_id: str, e: Exception) -> None:
+    if isinstance(e, ValueError):  # user-facing problems (bad file etc.)
+        store.update_job(job_id, status="error", stage="error", error=str(e))
+    else:
+        traceback.print_exc()
+        store.update_job(job_id, status="error", stage="error", error=f"{type(e).__name__}: {e}")
 
 
 def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
@@ -56,6 +94,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     else:
         samples, duration = audio.convert(src, jp / "audio.mp3")
     t_decoded = time.time()
+    _check_stop(job_id)
 
     parts = job.get("parts") if resume and job.get("parts") else chunking.split(samples)
     status["stage"] = "loading_model"
@@ -70,6 +109,9 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     last_d = [0.0]
 
     def dprog(p):
+        if job_id in _stop:
+            cancel.set()
+            raise JobStopped(_stop[job_id])
         status["dprogress"] = p
         if p - last_d[0] >= 0.02:
             last_d[0] = p
@@ -91,7 +133,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
         return _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
                                       th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded)
     finally:
-        cancel.set()  # no-op when finished; stops a still running separation after an error
+        cancel.set()  # no-op when finished; stops a still running separation after an error or a stop
 
 
 def _parallel_enabled() -> bool:
@@ -115,11 +157,13 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     if not (resume and (part_dir / "0.json").exists()) or True:
         asr.detect_languages(samples)  # which language(s) the whole recording is in (one cheap pass)
     for i, (a, b) in enumerate(parts):
+        _check_stop(job_id)  # between parts
         f = part_dir / f"{i}.json"
         if resume and f.exists():  # already done before the app was closed
             saved = json.loads(f.read_text("utf-8"))
         else:
             def tprog(p, a=a, b=b):
+                _check_stop(job_id)  # the engine stops (whisper.cpp: process killed) when this raises
                 status["progress"] = (a + p * (b - a)) / duration
                 if status["progress"] - last_t[0] >= 0.01:
                     last_t[0] = status["progress"]

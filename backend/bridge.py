@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 from . import asr, export, store
+from . import pipeline
 from .pipeline import run_job
 from .llm_api import LlmApi
 from .system_api import SystemApi
@@ -72,6 +73,25 @@ class Api(SystemApi, LlmApi):
         store.delete_job(job_id)
         return {"ok": True}
 
+    def pause_job(self, job_id: str) -> dict:
+        """Stop a running or queued job after its current step; finished parts are kept (resume_job continues)."""
+        job = _job(job_id)
+        if job["status"] not in ("running", "queued"):
+            raise ValueError("this recording is not being processed")
+        pipeline.request_stop(job_id, "pause")
+        return {"ok": True}
+
+    def cancel_job(self, job_id: str) -> dict:
+        """Stop a job and delete it. A paused job (nothing running) is deleted directly."""
+        job = _job(job_id)
+        if job["status"] in ("running", "queued"):
+            pipeline.request_stop(job_id, "cancel")
+            if job["status"] == "queued":  # nothing is running for it yet: it disappears at once
+                store.delete_job(job_id)
+        else:
+            store.delete_job(job_id)
+        return {"ok": True}
+
     def rename_job(self, job_id: str, name: str) -> dict:
         _job(job_id)
         return store.rename_job(job_id, name)
@@ -89,8 +109,8 @@ class Api(SystemApi, LlmApi):
     def resume_job(self, job_id: str) -> dict:
         """Continue a job that was interrupted (app closed while it was running)."""
         job = _job(job_id)
-        if job["status"] not in ("interrupted", "error"):
-            raise ValueError("this recording is not interrupted")
+        if job["status"] not in ("interrupted", "error", "paused"):
+            raise ValueError("this recording is not interrupted or paused")
         if not (store.job_path(job_id) / "audio.mp3").exists():
             raise ValueError("the audio of this recording is missing - add the file again")
         store.update_job(job_id, status="queued", stage="queued", error=None)

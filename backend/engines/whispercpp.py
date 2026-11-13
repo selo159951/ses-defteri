@@ -289,6 +289,7 @@ class WhisperCppEngine:
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                     text=True, errors="replace", cwd=str(exe.parent), **_run_kwargs())
             tail: list[str] = []
+            stopped: list[BaseException] = []  # raised by the progress callback (job paused / cancelled)
 
             def pump() -> None:
                 assert proc.stderr is not None
@@ -296,7 +297,12 @@ class WhisperCppEngine:
                     p = parse_progress(line)
                     if p is not None:
                         if progress:
-                            progress(min(1.0, p / 100.0))
+                            try:
+                                progress(min(1.0, p / 100.0))
+                            except BaseException as e:  # a stop request: kill the process, re-raise below
+                                stopped.append(e)
+                                proc.kill()
+                                return
                     else:
                         tail.append(line.rstrip())
                         del tail[:-30]
@@ -311,6 +317,8 @@ class WhisperCppEngine:
                 proc.wait()
                 raise RuntimeError(f"whisper-cli timed out after {timeout:.0f}s")
             t.join(5)
+            if stopped:
+                raise stopped[0]
             if proc.returncode != 0:
                 raise RuntimeError(f"whisper-cli failed (exit {proc.returncode}):\n" + "\n".join(tail[-8:]))
             jf = Path(str(out_base) + ".json")

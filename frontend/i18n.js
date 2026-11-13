@@ -54,7 +54,7 @@ const I18N = {
     idea: "Idea", developer: "Developed by", and: "and", language: "Language",
     find_replace: "Find & replace", filters: "Filter", filters_n: "Filter ({n})",
     speaker_menu: "More options for this speaker", move_all_to: "Move all lines to:",
-    st_interrupted: "Interrupted", resume: "Resume", part_n: "(part {i}/{n})",
+    st_interrupted: "Interrupted", st_paused: "Paused", pause: "Pause", cancel_job: "Cancel", cancel_job_confirm: 'Cancel "{name}"? The recording and its progress will be deleted.', resume: "Resume", part_n: "(part {i}/{n})",
     // ---- people ----
     people: "People", people_hint: "Save a voice once - it is recognised in every new recording and the name is filled in for you. Voices never leave this computer.",
     add_person: "+ Add person", person_name_ph: "Name (e.g. Selim)", from_file: "Choose an audio file", from_mic: "Read a text aloud",
@@ -216,7 +216,7 @@ const I18N = {
     idea: "Fikir Babası", developer: "Geliştirici", and: "ve", language: "Dil",
     find_replace: "Bul ve değiştir", filters: "Filtre", filters_n: "Filtre ({n})",
     speaker_menu: "Bu konuşmacı için diğer seçenekler", move_all_to: "Tüm satırları şuna taşı:",
-    st_interrupted: "Yarım kaldı", resume: "Devam et", part_n: "(parça {i}/{n})",
+    st_interrupted: "Yarım kaldı", st_paused: "Duraklatıldı", pause: "Duraklat", cancel_job: "İptal", cancel_job_confirm: '"{name}" iptal edilsin mi? Kayıt ve ilerlemesi silinecek.', resume: "Devam et", part_n: "(parça {i}/{n})",
     // ---- people ----
     people: "Kişiler", people_hint: "Bir sesi bir kez kaydedin - yeni kayıtlarda otomatik tanınır ve isim kendiliğinden yazılır. Sesler bu bilgisayardan çıkmaz.",
     add_person: "+ Kişi ekle", person_name_ph: "İsim (örn. Selim)", from_file: "Ses dosyası seç", from_mic: "Metni sesli oku",

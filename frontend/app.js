@@ -60,7 +60,7 @@ function jobRow(j, q) {
   };
   const title = el("a", { href: "#", className: "jtitle" }, ...marked(j.filename, j.name_match ? q : ""));
   title.onclick = (e) => { e.preventDefault(); open(); };
-  const status = { done: "st_done", error: "st_error", running: "st_running", queued: "st_queued", interrupted: "st_interrupted" }[j.status];
+  const status = { done: "st_done", error: "st_error", running: "st_running", queued: "st_queued", interrupted: "st_interrupted", paused: "st_paused" }[j.status];
   const meta = [new Date(j.created * 1000).toLocaleString(LANG), j.duration ? mmss(j.duration) : null,
     j.language?.toUpperCase(), j.speakers?.length ? j.speakers.map(displayName).join(", ") : null,
     j.lines ? plural(j.lines, "line_1", "lines_n") + (j.edited ? " · " + t("edited_n", { n: j.edited }) : "") : null]
@@ -96,7 +96,14 @@ function jobRow(j, q) {
   const del = el("button", { textContent: t("delete"), className: "small" });
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
   const btns = el("div", { className: "jbtns" }, ren, del);
-  if (j.status === "interrupted") {
+  if (j.status === "running" || j.status === "queued") {
+    const pz = el("button", { className: "small" }, icText("pause", t("pause")));
+    pz.onclick = async () => { try { await call("pause_job", j.id); } catch {} loadJobs(); };
+    const cx = el("button", { className: "small" }, icText("x", t("cancel_job")));
+    cx.onclick = () => cancelJob(j.id, j.filename);
+    btns.prepend(pz, cx);
+  }
+  if (j.status === "interrupted" || j.status === "paused") {
     const res = el("button", { textContent: t("resume"), className: "small primary" });
     res.onclick = () => resume(j.id);
     btns.prepend(res);
@@ -118,6 +125,16 @@ async function resume(id) {
   try { onJobStarted(await call("resume_job", id)); } catch (e) { onJobError(e.message || e); }
 }
 
+async function cancelJob(id, name) {
+  if (!confirm(t("cancel_job_confirm", { name }))) return;
+  try { await call("cancel_job", id); } catch {}
+  if (watching === id) { watching = null; $("progress").hidden = true; }
+  loadJobs();
+}
+$("pPause").onclick = async () => { if (watching) { try { await call("pause_job", watching); } catch {} } };
+$("pResume").onclick = () => { if (watching) resume(watching); };
+$("pCancel").onclick = () => { if (watching) cancelJob(watching, $("pname").textContent.split("  ·  ")[0]); };
+
 let watching = null;
 function watch(id, name) {
   watching = id;
@@ -126,7 +143,12 @@ function watch(id, name) {
   const tick = async () => {
     if (watching !== id) return; // another file took over the progress box
     let j;
-    try { j = await call("get_job", id); } catch { return setTimeout(tick, 2000); }
+    try { j = await call("get_job", id); } catch (e) {
+      if (/not found/i.test(String(e?.message || e))) { watching = null; $("progress").hidden = true; return loadJobs(); } // cancelled
+      return setTimeout(tick, 2000);
+    }
+    const paused = j.status === "paused";
+    $("pPause").hidden = paused; $("pResume").hidden = !paused;
     const secs = Math.round((Date.now() - t0) / 1000);
     const asrP = j.progress || 0, diaP = j.dprogress || 0;
     const active = j.stage === "transcribing" || j.stage === "diarizing";
@@ -134,6 +156,11 @@ function watch(id, name) {
     const overall = active ? 0.6 * asrP + 0.4 * diaP : j.stage === "done" ? 1 : 0.03;
     $("pfill").style.width = Math.round(overall * 100) + "%";
     $("pfill").classList.toggle("indeterminate", !active && j.status === "running");
+    if (paused) {
+      $("pfill").classList.remove("indeterminate");
+      $("pstage").textContent = `${t("st_paused")}  ·  ${t("stage_" + j.stage)}`;
+      return loadJobs();
+    }
     if (j.status === "error") { $("pstage").textContent = t("error") + ": " + j.error; return loadJobs(); }
     if (j.status === "done") { $("progress").hidden = true; loadJobs(); return openJob(id); }
     const dev = { cuda: "NVIDIA GPU", vulkan: "GPU (Vulkan)", cpu: "CPU" }[j.device];
