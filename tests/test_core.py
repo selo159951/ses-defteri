@@ -396,15 +396,15 @@ class _FakeWhisper:
         return iter([T(words=words, end=1.2)]), T(language=language or "en")
 
 
-def test_language_mode_setting_and_ct2_arguments(monkeypatch):
+def test_language_is_always_auto_and_ct2_arguments(monkeypatch):
     import numpy as np
     from backend import asr, bridge
     from backend.engines.ct2 import CT2Engine
 
     assert asr.language_mode() == "auto"
     api = bridge.Api()
-    assert api.set_settings({"language": "klingon"})["language"] == "auto"  # unknown values are ignored
-    assert api.set_settings({"language": "mixed"})["language"] == "mixed"
+    assert api.set_settings({"language": "klingon"})["language"] == "auto"  # simple edition: language is always auto
+    assert api.set_settings({"language": "mixed"})["language"] == "auto"
     eng = CT2Engine("cpu", "int8")
     eng._model = _FakeWhisper()
     x = np.ones(16000 * 3, "float32") * 0.05
@@ -414,30 +414,6 @@ def test_language_mode_setting_and_ct2_arguments(monkeypatch):
     monkeypatch.setattr(asr, "_langs", [("en", 0.9), ("tr", 0.1)])
     words, lang = eng.transcribe(x, 3.0, lambda p: None)
     assert eng._model.calls == ["en"] and lang == "en" and words[0].prob == 0.95  # probabilities are kept
-    asr.set_setting("language", "tr")
-    eng.transcribe(x, 3.0, lambda p: None)
-    assert eng._model.calls[-1] == "tr"
-
-
-def test_mixed_mode_only_tries_languages_in_the_recording_and_keeps_the_surer_one(monkeypatch):
-    import numpy as np
-    from backend import asr, chunking
-    from backend.engines.ct2 import CT2Engine
-
-    eng = CT2Engine("cpu", "int8")
-    eng._model = _FakeWhisper(good="tr")  # this window really is Turkish
-    x = np.ones(16000 * 40, "float32") * 0.05
-    monkeypatch.setattr(chunking, "speech_regions", lambda s: [(0.0, 10.0), (12.0, 20.0), (30.0, 38.0)])
-    asr.set_setting("language", "mixed")
-    monkeypatch.setattr(asr, "_langs", [("en", 0.6), ("tr", 0.35), ("de", 0.05)])
-    words, lang = eng.transcribe(x, 40.0, lambda p: None)
-    assert set(eng._model.calls) == {"en", "tr"} and "de" not in eng._model.calls  # German is not in the recording
-    assert words and all(w.prob == 0.95 for w in words) and lang == "tr"
-    # a recording with one language never runs the two-language path
-    eng._model.calls.clear()
-    monkeypatch.setattr(asr, "_langs", [("en", 0.97), ("tr", 0.03)])
-    eng.transcribe(x, 40.0, lambda p: None)
-    assert eng._model.calls == ["en"]
 
 
 def test_segments_carry_text_confidence():

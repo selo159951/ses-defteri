@@ -268,33 +268,6 @@ def test_start_refuses_without_llm_and_queues_with_it(monkeypatch):
     assert done.wait(5)
 
 
-def test_meeting_mode_setting_and_hook(monkeypatch):
-    from backend import asr, pipeline
-
-    api = bridge.Api(lambda: None)
-    assert api.get_settings()["meeting_mode"] is False
-    assert api.set_settings({"meeting_mode": True})["meeting_mode"] is True
-    started = []
-    monkeypatch.setattr(analysis, "start", lambda job_id: started.append(job_id))
-    monkeypatch.setattr("backend.diarize.refine_by_sentence", lambda s, w, spk, cb, margins=None: spk)
-    monkeypatch.setattr("backend.people.apply_to_job", lambda *a, **k: {})
-    monkeypatch.setattr(asr, "transcribe", lambda *a, **k: ([], "tr"))
-    jid = make_job([])
-    jp = store.job_path(jid)
-    st = {"stage": "", "progress": 0.0, "dprogress": 0.0}
-
-    def finish():
-        pipeline._transcribe_and_finish(jid, jp, {}, None, 10.0, [], "cpu", False, None,
-                                        {"turns": [], "secs": 0.0}, lambda: None, lambda p: None,
-                                        lambda **k: None, st, False, 0.0, 0.0)
-
-    finish()
-    assert started == [jid]
-    api.set_settings({"meeting_mode": False})
-    finish()
-    assert started == [jid]
-
-
 def test_mark_interrupted_cancels_leftover_analysis():
     jid = make_job(hand_made())
     store.update_job(jid, analysis={"state": "running", "stage": "notes"})
