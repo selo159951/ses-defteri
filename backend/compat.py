@@ -299,10 +299,7 @@ def startup_problem(exe_dir: str | None = None, frozen: bool | None = None) -> s
         d = exe_dir or str(Path(sys.executable).resolve().parent)
         if running_from_zip(d, tempfile.gettempdir()):
             return MSG_ZIP
-        from . import models
-
-        if not models.bundled():
-            return MSG_FILES_MISSING
+        # the speech model is downloaded on first start now (no "model missing" check here)
     ok, detail = data_dir_writable()
     if not ok:
         return MSG_DATA_DIR.format(path=detail)

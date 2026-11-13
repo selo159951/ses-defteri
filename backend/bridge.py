@@ -11,7 +11,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import asr, export, store
+from . import asr, export, models, store
 from . import pipeline
 from .pipeline import run_job
 from .llm_api import LlmApi
@@ -81,6 +81,8 @@ class Api(SystemApi, LlmApi):
     def start_job(self, path: str) -> dict:
         """Start transcribing a file that is on disk (drag & drop or file picker).
         The job takes the next place in the line: files are processed one at a time, first come first served."""
+        if models.first_run_blocking():
+            raise ValueError("Ses tanıma modeli henüz indiriliyor. İndirme bitince kayıt ekleyebilirsin.")
         src = Path(path)
         if src.is_dir():
             raise ValueError(f"\"{src.name}\" bir klasör, ses ya da video dosyası değil. Klasörün içindeki dosyaları tek tek seç.")
@@ -105,6 +107,16 @@ class Api(SystemApi, LlmApi):
             except Exception as e:
                 out.append({"skipped": True, "filename": Path(str(p)).name, "error": str(e)})
         return out
+
+    # ---------------- first start: the speech model is downloaded automatically ----------------
+    def first_run_status(self) -> dict:
+        """{needed, state (idle|downloading|done|error|no_internet), done, total, items[{label, done, total}],
+        speed (bytes/s), eta (seconds|None), retrying, error (Turkish text|None)}"""
+        return models.first_run_status()
+
+    def start_first_run_download(self) -> dict:
+        """Start (or retry) the download of the missing models; returns the same as first_run_status()."""
+        return models.start_first_run_download()
 
     def get_queue(self) -> dict:
         """The recording that is processed now and the ones waiting, in the order they will run."""

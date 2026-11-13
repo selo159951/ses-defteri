@@ -4,8 +4,9 @@ from PyInstaller.utils.hooks import collect_all
 
 import os
 datas = [("frontend", "frontend"), ("assets", "assets")]
-# speaker models + the speech model (simple app: nothing is downloaded); no language models
-datas.append(("models/whisper-large-v3-turbo", "whisper"))
+# speaker models only (small). The speech model (whisper large-v3-turbo) is NOT in the package: it is downloaded on
+# first start into %APPDATA%\SesDefteriBasit\models. A "whisper-large-v3-turbo" folder next to SesDefteri.exe is used
+# instead of downloading (backend/models.py bundled()). No language models.
 for n in os.listdir("models"):
     if n not in ("llm", "whisper-large-v3-turbo"):
         src = os.path.join("models", n)

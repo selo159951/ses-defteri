@@ -118,3 +118,32 @@ header h1 { font-size: 24px; }
 .qcancel:hover { border-color: #c0392b; color: #c0392b; }
 #pnote { white-space: pre-line; background: #fff4e0; border: 1px solid #e0b060; color: #6b4200; border-radius: 12px; padding: 12px 18px; margin: 16px 0 0; font-size: 18px; }
 @media (prefers-color-scheme: dark) { #pnote { background: #3a2c10; border-color: #8a6a28; color: #f0d9a8; } }
+
+/* first-start screen: the speech model is downloaded (simple-firstrun.js) */
+#firstrun { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: var(--bg); overflow: auto; outline: none; }
+#firstrun .frbox { width: min(680px, 100%); text-align: center; }
+#firstrun .fricon { width: 84px; height: 84px; margin: 0 auto 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--s0); color: var(--accent); }
+#firstrun .fricon .ic { width: 42px; height: 42px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#firstrun h2 { font-size: 30px; line-height: 1.25; margin: 0 0 14px; }
+#firstrun .frwhy { font-size: 20px; color: var(--muted); margin: 0 0 30px; }
+#firstrun .frbar { height: 26px; border-radius: 13px; background: var(--line); overflow: hidden; }
+#firstrun #frFill { height: 100%; width: 0; background: var(--accent); border-radius: 13px; transition: width .5s ease; }
+#firstrun .frnums { display: flex; justify-content: space-between; margin-top: 10px; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#firstrun .frinfo { font-size: 21px; margin: 14px 0 0; min-height: 1.5em; }
+#firstrun .fritems { list-style: none; margin: 22px 0 0; padding: 0; color: var(--muted); font-size: 17px; }
+#firstrun .fritems li { margin: 4px 0; }
+#firstrun .fritems li.done { color: var(--added); }
+#firstrun .fritems .ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; vertical-align: -3px; }
+#firstrun .frkeep { margin: 26px 0 0; font-size: 18px; color: var(--muted); }
+#firstrun .frerr { margin-top: 26px; padding: 20px 22px; border-radius: 14px; background: var(--card); border: 2px solid #dc2626; }
+#firstrun .frerr p { margin: 0 0 16px; font-size: 20px; }
+#firstrun .frerr button { font-size: 22px; padding: 14px 38px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; }
+#firstrun.failed .fricon { background: #fee2e2; color: #dc2626; }
+#firstrun.failed #frFill { background: #dc2626; }
+#firstrun.ok .fricon { background: var(--s1); color: var(--added); }
+#firstrun.ok #frFill { background: var(--added); }
+@media (prefers-color-scheme: dark) { #firstrun.failed .fricon { background: #5a1f24; color: #f87171; } }
+@media (max-width: 520px) { #firstrun h2 { font-size: 24px; } #firstrun .frwhy { font-size: 18px; } #firstrun .frnums { font-size: 20px; } }
+body.frActive { overflow: hidden; }

@@ -1,10 +1,9 @@
 # Build the simple app: .\build_windows.ps1  ->  Desktop\SesDefteri-Basit (folder) and Desktop\SesDefteri-Basit.zip
-# One package for every PC: runs on the processor, the speech model is inside (nothing to download).
+# One package for every PC: runs on the processor, the speech model is downloaded on first start (internet once).
 # Uses the Python environment of the full project next to it (..\meet_speech_to_text\.venv).
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $py = Join-Path $PSScriptRoot "..\meet_speech_to_text\.venv\Scripts"
-if (-not (Test-Path "models\whisper-large-v3-turbo\model.bin")) { throw "models\whisper-large-v3-turbo is missing (the bundled speech model)" }
 & "$py\pyinstaller.exe" --noconfirm --clean SesDefteri.spec
 # the Visual C++ runtime must be inside the package (a PC without the redistributable still has to work)
 foreach ($d in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "python312.dll") {

@@ -193,6 +193,7 @@
 
   async function init() {
     for (let n = 0; document.getElementById("splash") && n < 150; n++) await new Promise((r) => setTimeout(r, 200));
+    await (window.firstRunGate || Promise.resolve());  // the first-start download screen must be gone first
     let st = {};
     try { st = await call("get_settings"); } catch (_) { return; }
     jobDone = !!st.tour_job_done;

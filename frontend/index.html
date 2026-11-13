@@ -71,6 +71,23 @@
   <p class="credits" id="creditsLine"></p>
 </main>
 
+<section id="firstrun" hidden role="dialog" aria-modal="true" aria-labelledby="frTitle">
+  <div class="frbox">
+    <div id="frIcon" class="fricon" aria-hidden="true"></div>
+    <h2 id="frTitle">İlk açılış: ses tanıma modeli indiriliyor</h2>
+    <p id="frWhy" class="frwhy">Bu sadece bir kez yapılır. Sonra internet gerekmez, kayıtlarınız bilgisayardan çıkmaz.</p>
+    <div class="frbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="frFill"></div></div>
+    <div class="frnums"><span id="frBytes"></span><span id="frPct"></span></div>
+    <p id="frInfo" class="frinfo" role="status" aria-live="polite"></p>
+    <ul id="frItems" class="fritems"></ul>
+    <p id="frKeep" class="frkeep">Lütfen programı kapatma. İndirme bitene kadar kayıt eklenemez.</p>
+    <div id="frErr" class="frerr" role="alert" hidden>
+      <p id="frErrText"></p>
+      <button id="frRetry" type="button">Tekrar dene</button>
+    </div>
+  </div>
+</section>
+
 <main id="system" hidden></main>
 <main id="people" hidden></main>
 
@@ -172,6 +189,7 @@
 <script src="simple.js"></script>
 <script src="app.js"></script>
 <script src="simple-progress.js"></script>
+<script src="simple-firstrun.js"></script>
 <script src="simple-tour.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 ﻿SES DEFTERİ - KULLANIM KILAVUZU
 
 Bu program, bir video ya da ses kaydındaki konuşmaları yazıya döker.
-Her şey bilgisayarının içinde olur. İnternet gerekmez, hiçbir şey dışarı gönderilmez.
+Her şey bilgisayarının içinde olur. İnternet sadece ilk açılışta bir kez gerekir, hiçbir kayıt dışarı gönderilmez.
 (mp4, mp3, wav, m4a ve çoğu video ve ses dosyasıyla çalışır.)
 
 AÇMAK
@@ -11,6 +11,16 @@ AÇMAK
    sonra "Yine de çalıştır"a tıkla. Bu sadece ilk seferde çıkar.
 4. İpucu: SesDefteri.exe'ye sağ tıkla, "Gönder", sonra "Masaüstü (kısayol oluştur)" de.
    Böylece program masaüstünde durur.
+
+İLK AÇILIŞTA
+Program ilk açıldığında ses tanıma modelini kendisi indirir. Senin bir şey yapmana gerek yok.
+- Bunun için internet gerekir, ama sadece bir kez. Sonra internetsiz de çalışır.
+- Toplam yaklaşık 2,2 GB iner (ses tanıma modeli 1,6 GB, ekran kartı için hızlı model 0,6 GB).
+- İnternet hızına göre birkaç dakika sürer. Ekranda ne kadarının indiği ve ne kadar kaldığı yazar.
+- İndirme bitene kadar programı kapatma. Yine de kapanırsa ya da internet kesilirse sorun olmaz:
+  programı tekrar açınca indirme kaldığı yerden devam eder.
+- İnternet yoksa ekranda uyarı çıkar. Bağlantıyı düzeltip "Tekrar dene"ye bas.
+- Bilgisayarında en az 3 GB boş yer olmalı.
 
 İLK AÇILIŞTA MAVİ UYARI ÇIKARSA (Windows SmartScreen)
 Program yeni olduğu için Windows "Windows bilgisayarınızı korudu" diye mavi bir pencere gösterebilir.
