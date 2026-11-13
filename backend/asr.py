@@ -14,6 +14,7 @@ from typing import Callable
 import numpy as np
 
 from . import engines, hardware, models, store
+from .engines import tuning
 from .merge import Word
 
 MODEL_NAME = models.DEFAULT
@@ -64,7 +65,62 @@ def set_use_gpu(on: bool) -> None:
 
 
 def plan() -> dict:
-    return engines.choose(hardware.info(), get_settings())
+    """Engine for this PC: CUDA if it works, else the processor, or whisper.cpp/Vulkan when the first-use
+    self-test (engines/tuning.py) found it faster here. selftest=True means "no verdict yet"."""
+    return tuning.choose_tuned(hardware.info(), get_settings())
+
+
+_selftest_lock = threading.Lock()
+
+
+def _run_selftest(model: str, note: Callable[[str | None], None] | None):
+    """Time the processor and the Vulkan engine on the bundled sample, remember the winner. Never raises.
+    Returns the loaded processor engine when it won (so it is not loaded twice), else None."""
+    with _selftest_lock:
+        p = plan()
+        if not p.get("selftest"):  # another thread finished it meanwhile
+            return None
+        fp = p.get("fingerprint") or tuning.fingerprint(hardware.info())
+        kept = None
+        if note:
+            try:
+                note(tuning.NOTE_SELFTEST)
+            except Exception:
+                pass
+        try:
+            sample = tuning.load_sample()
+            if sample is None:
+                pick = tuning.make_pick(fp, tuning.CPU, "no_sample")
+            else:
+                from .engines.ct2 import CT2Engine
+                from .engines.whispercpp import WhisperCppEngine
+
+                res, kept = tuning.run_selftest(
+                    model, {tuning.CPU: lambda: CT2Engine("cpu", "int8"), tuning.VULKAN: WhisperCppEngine}, sample)
+                pick = tuning.make_pick(fp, res["winner"], res["reason"], runs=tuning.summary(res))
+        except Exception as e:  # noqa: BLE001 - the test itself must never fail a job
+            import traceback
+
+            traceback.print_exc()
+            pick = tuning.make_pick(fp, tuning.CPU, "selftest_error", error=f"{type(e).__name__}: {e}"[:200])
+        try:
+            set_setting("engine_pick", pick)
+        except OSError:
+            pass
+        print("engine self-test:", pick["winner"], pick["reason"], pick.get("runs"))
+        return kept
+
+
+def _mark_vulkan_failed(err: BaseException, stage: str) -> None:
+    """Whisper.cpp broke while really running: use the processor from now on (this PC, until the hardware
+    or the app's tuning version changes, or 14 days pass)."""
+    print(f"Vulkan engine failed ({stage}), using the processor:", err)
+    fp = plan().get("fingerprint") or tuning.fingerprint(hardware.info())
+    try:
+        set_setting("engine_pick", tuning.make_pick(fp, tuning.CPU, "runtime_failure",
+                                                    error=f"{type(err).__name__}: {err}"[:200]))
+    except OSError:
+        pass
 
 
 def key() -> str:
@@ -74,19 +130,39 @@ def key() -> str:
 
 
 # ---------- engine ----------
-def load_model(progress: Callable[[float], None] | None = None):
-    """Create/load the engine chosen by settings + hardware (cached while nothing changes)."""
+def load_model(progress: Callable[[float], None] | None = None, note: Callable[[str | None], None] | None = None):
+    """Create/load the engine chosen by the plan (cached while nothing changes). On the very first use of a
+    PC with a usable graphics chip this first runs the short engine self-test (note("selftest") tells the
+    caller, note(None) when done). An engine that cannot load falls back to the processor."""
     global _engine, _engine_key, _engine_plan
-    p, model = plan(), get_settings()["model"]
-    k = ((p["engine"], p["device"], p["compute"]), model)
-    with _lock:
-        if _engine is not None and _engine_key == k:
-            return _engine
-        eng = engines.create(p)
-        eng.load(model, progress)
-        _engine, _engine_key = eng, k
-        _engine_plan = dict(p, device=eng.device)  # the engine may have fallen back to CPU
-    return _engine
+    model = get_settings()["model"]
+    p = plan()
+    kept = None
+    if p.get("selftest"):
+        kept = _run_selftest(model, note)
+        if note:
+            try:
+                note(None)
+            except Exception:
+                pass
+        p = plan()
+    for attempt in (1, 2):
+        k = ((p["engine"], p["device"], p["compute"]), model)
+        with _lock:
+            if _engine is not None and _engine_key == k:
+                return _engine
+            eng = kept if (kept is not None and p["engine"] == "ct2") else engines.create(p)
+            try:
+                eng.load(model, progress)
+            except Exception as e:
+                if p["engine"] != "whispercpp" or attempt == 2:
+                    raise
+                _mark_vulkan_failed(e, "load")
+                p, kept = plan(), None
+                continue
+            _engine, _engine_key = eng, k
+            _engine_plan = dict(p, device=eng.device)  # the engine may have fallen back to CPU
+        return _engine
 
 
 _langs: list[tuple[str, float]] = []
@@ -126,7 +202,17 @@ def release() -> None:
 
 def transcribe(samples: np.ndarray, duration: float,
                progress: Callable[[float], None]) -> tuple[list[Word], str]:
-    return load_model().transcribe(samples, duration, progress)
+    eng = load_model()
+    try:
+        return eng.transcribe(samples, duration, progress)
+    except Exception as e:
+        from .engines.whispercpp import WhisperCppError
+
+        if not isinstance(e, WhisperCppError):  # CT2 errors and stop requests go up as before
+            raise
+        _mark_vulkan_failed(e, "transcribe")
+        release()
+        return load_model().transcribe(samples, duration, progress)  # the processor now; one retry only
 
 
 def status() -> dict:

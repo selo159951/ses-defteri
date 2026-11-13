@@ -225,6 +225,81 @@ def memory() -> dict:
     return {"total": int(st.ullTotalPhys), "available": int(st.ullAvailPhys)}
 
 
+def _count_cores_in_buffer(buf: bytes, ptr_size: int = 8) -> int:
+    """Number of physical cores in a GetLogicalProcessorInformation buffer (records with Relationship
+    RelationProcessorCore = 0). Record: ULONG_PTR mask, DWORD relationship, (pad), 16 bytes union."""
+    rec = ptr_size + 4 + (4 if ptr_size == 8 else 0) + 16
+    n = 0
+    for off in range(0, len(buf) - rec + 1, rec):
+        if int.from_bytes(buf[off + ptr_size:off + ptr_size + 4], "little") == 0:
+            n += 1
+    return n
+
+
+def _windows_physical_cores() -> int:
+    import ctypes
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetLogicalProcessorInformation.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD)]
+    size = wintypes.DWORD(0)
+    k32.GetLogicalProcessorInformation(None, ctypes.byref(size))  # fails with the size we need
+    if not size.value:
+        return 0
+    buf = ctypes.create_string_buffer(size.value)
+    if not k32.GetLogicalProcessorInformation(buf, ctypes.byref(size)):
+        return 0
+    return _count_cores_in_buffer(buf.raw[:size.value], ctypes.sizeof(ctypes.c_void_p))
+
+
+_physical: int | None = None
+
+
+def physical_cores() -> int:
+    """Real CPU cores (not hyper-threads). Windows API, then psutil, then logical // 2. Cached, never raises."""
+    global _physical
+    if _physical is None:
+        logical = os.cpu_count() or 1
+        n = 0
+        try:
+            if os.name == "nt":
+                n = _windows_physical_cores()
+        except Exception:
+            n = 0
+        if not n:
+            try:
+                import psutil
+
+                n = psutil.cpu_count(logical=False) or 0
+            except Exception:
+                n = 0
+        if not n:
+            n = logical // 2 if logical >= 4 else logical
+        _physical = max(1, min(n, logical))
+    return _physical
+
+
+def cpu_threads(physical: int | None = None, cap: int = 8) -> int:
+    """Threads for CPU inference: one per physical core. Hyper-threads only fight over the same
+    execution units and cache (measured slower for CTranslate2), and beyond ~8 threads the gain is
+    small while the PC gets sluggish."""
+    p = physical if physical is not None else physical_cores()
+    return max(1, min(int(p), cap))
+
+
+def diarize_threads(physical: int | None = None, parallel: bool = False) -> int:
+    """Threads for speaker separation: all physical cores when it runs alone, two fewer when it shares
+    the processor with a GPU transcription (which needs a few cores to feed the graphics chip)."""
+    p = physical if physical is not None else physical_cores()
+    return max(1, min(16, p - 2 if parallel and p > 4 else p))
+
+
+def whisper_threads(physical: int | None = None) -> int:
+    """CPU threads whisper.cpp gets next to the graphics chip: it only feeds the GPU, more threads just spin."""
+    p = physical if physical is not None else physical_cores()
+    return max(1, min(4, int(p)))
+
+
 def vulkan_runtime() -> bool:
     root = os.environ.get("SystemRoot", r"C:\Windows")
     return (Path(root) / "System32" / "vulkan-1.dll").is_file()
@@ -239,7 +314,7 @@ def info(refresh: bool = False) -> dict:
             mem = memory()
             _cache = {
                 "gpus": detect_gpus(),
-                "cpu": {"name": cpu_name(), "cores": os.cpu_count() or 1},
+                "cpu": {"name": cpu_name(), "cores": os.cpu_count() or 1, "physical": physical_cores()},
                 "ram": {"total": mem["total"], "available": mem["available"],
                         "total_gb": round(mem["total"] / GB, 1)},
                 "vulkan": vulkan_runtime(),

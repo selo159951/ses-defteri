@@ -19,7 +19,7 @@ from typing import Callable
 
 import numpy as np
 
-from .. import store
+from .. import hardware, models, store
 from ..merge import Word
 
 HF_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{name}.bin"
@@ -28,6 +28,7 @@ _RUN_TIMEOUT_MIN = 600.0  # floor for one whisper-cli run (seconds)
 
 _DEVICE_RE = re.compile(r"ggml_vulkan:\s*(\d+)\s*=\s*(.+)")
 _PROGRESS_RE = re.compile(r"progress\s*=\s*(\d+)\s*%")
+_TIMING_RE = re.compile(r"whisper_print_timings:\s*(load|total) time\s*=\s*([\d.]+)\s*ms")
 _SPECIAL_RE = re.compile(r"^\s*(\[_[A-Z]+_.*\]|<\|.*\|>|\[BLANK_AUDIO\]|\[[A-Z_]+\])\s*$")
 
 
@@ -40,6 +41,44 @@ def binary_dir() -> Path:
 
 def binary_path() -> Path:
     return binary_dir() / ("whisper-cli.exe" if os.name == "nt" else "whisper-cli")
+
+
+class WhisperCppError(RuntimeError):
+    """The whisper.cpp run itself failed (binary, driver, model, empty output). The caller falls back to
+    the processor. A stop request raised by a progress callback is NOT wrapped: it passes through as is."""
+
+
+def parse_timings(lines) -> dict:
+    """whisper_print_timings lines -> {"load": seconds, "total": seconds} (missing keys when not printed)."""
+    out = {}
+    for line in lines:
+        m = _TIMING_RE.search(line)
+        if m:
+            out[m.group(1)] = float(m.group(2)) / 1000.0
+    return out
+
+
+def ggml_candidates(integrated: bool = True) -> tuple[str, ...]:
+    """ggml files to look for, best first. Onboard graphics (2 GB of their own memory + shared RAM) get
+    the quantized q5_0 file only; a real graphics card may also use the full-size file."""
+    return ("large-v3-turbo-q5_0",) if integrated else ("large-v3-turbo-q5_0", "large-v3-turbo")
+
+
+def find_model(model: str = "large-v3-turbo", integrated: bool = True) -> Path | None:
+    """Downloaded ggml file for `model`, or None. Uses models.ggml_path (the downloader's API); when it
+    does not exist (or says no) the Vulkan engine is simply not available. Nothing is downloaded here."""
+    fn = getattr(models, "ggml_path", None)
+    if not callable(fn):
+        return None
+    names = ggml_candidates(integrated) if model == "large-v3-turbo" else (model,)
+    for n in names:
+        try:
+            p = fn(n)
+        except Exception:
+            p = None
+        if p and Path(p).is_file():
+            return Path(p)
+    return None
 
 
 def models_dir() -> Path:
@@ -238,29 +277,30 @@ class WhisperCppEngine:
         self.device_name = ""
         self.model_path: Path | None = None
         self.model_name = ""
+        self.last_timings: dict = {}  # {"load": s, "total": s} of the last run, from whisper-cli's own report
 
     def load(self, model: str = "large-v3-turbo", progress: Callable[[float], None] | None = None,
              vram_gb: float | None = None) -> None:
         exe = binary_path()
         if not exe.is_file():
-            raise RuntimeError(f"whisper.cpp binary not found: {exe}")
+            raise WhisperCppError(f"whisper.cpp binary not found: {exe}")
         best = best_device()
-        self.device = "vulkan" if best else "cpu"
-        if best:
-            self.device_index, self.device_name = best["index"], best["name"]
-        stem = model_file_name(model, vram_gb)
-        path = models_dir() / f"ggml-{stem}.bin"
-        if not path.is_file() or path.stat().st_size < 10_000_000:
-            download_model(stem, path, progress)
+        if not best:
+            raise WhisperCppError("no Vulkan GPU device found")
+        self.device = "vulkan"
+        self.device_index, self.device_name = best["index"], best["name"]
+        path = find_model(model, bool(best.get("integrated", True)))
+        if path is None:
+            raise WhisperCppError("ggml model file is not downloaded")
         self.model_path = path
-        self.model_name = stem
+        self.model_name = path.stem.removeprefix("ggml-")
 
     def transcribe(self, samples: np.ndarray, duration: float,
                    progress: Callable[[float], None] | None = None) -> tuple[list[Word], str]:
         if self.model_path is None:
             raise RuntimeError("model not loaded")
         exe = binary_path()
-        threads = max(1, min(8, (os.cpu_count() or 4) // 2))
+        threads = hardware.whisper_threads()
         pcm = (np.clip(np.asarray(samples, dtype=np.float32), -1.0, 1.0) * 32767.0).astype("<i2")
         with tempfile.TemporaryDirectory(prefix="mt_wcpp_") as td:
             wav = Path(td) / "in.wav"
@@ -286,20 +326,31 @@ class WhisperCppEngine:
                 cmd.append("-ng")
             else:
                 cmd += ["-dev", str(self.device_index)]
-            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                    text=True, errors="replace", cwd=str(exe.parent), **_run_kwargs())
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                        text=True, errors="replace", cwd=str(exe.parent), **_run_kwargs())
+            except OSError as e:
+                raise WhisperCppError(f"cannot start whisper-cli: {e}") from e
             tail: list[str] = []
+            stopped: list[BaseException] = []  # raised by the progress callback (stop / cancel request)
 
             def pump() -> None:
                 assert proc.stderr is not None
                 for line in proc.stderr:
                     p = parse_progress(line)
                     if p is not None:
-                        if progress:
-                            progress(min(1.0, p / 100.0))
+                        if progress and not stopped:
+                            try:
+                                progress(min(1.0, p / 100.0))
+                            except BaseException as e:  # a stop request: end the run now, re-raise below
+                                stopped.append(e)
+                                try:
+                                    proc.kill()
+                                except OSError:
+                                    pass
                     else:
                         tail.append(line.rstrip())
-                        del tail[:-30]
+                        del tail[:-60]
 
             t = threading.Thread(target=pump, daemon=True)
             t.start()
@@ -309,14 +360,20 @@ class WhisperCppEngine:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-                raise RuntimeError(f"whisper-cli timed out after {timeout:.0f}s")
+                raise WhisperCppError(f"whisper-cli timed out after {timeout:.0f}s")
             t.join(5)
+            if stopped:
+                raise stopped[0]
             if proc.returncode != 0:
-                raise RuntimeError(f"whisper-cli failed (exit {proc.returncode}):\n" + "\n".join(tail[-8:]))
+                raise WhisperCppError(f"whisper-cli failed (exit {proc.returncode}):\n" + "\n".join(tail[-8:]))
             jf = Path(str(out_base) + ".json")
             if not jf.is_file():
-                raise RuntimeError("whisper-cli produced no JSON output")
-            data = json.loads(jf.read_text("utf-8", errors="replace"))
+                raise WhisperCppError("whisper-cli produced no JSON output")
+            try:
+                data = json.loads(jf.read_text("utf-8", errors="replace"))
+            except ValueError as e:
+                raise WhisperCppError(f"whisper-cli wrote unreadable JSON: {e}") from e
+            self.last_timings = parse_timings(tail)
         if progress:
             progress(1.0)
         return words_from_json(data)

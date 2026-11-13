@@ -9,7 +9,7 @@ from typing import Callable
 
 import numpy as np
 
-from .. import compat, models
+from .. import compat, hardware, models
 from ..merge import Word
 
 
@@ -70,7 +70,8 @@ def mark_cuda_broken(err: str) -> None:
 class CT2Engine:
     name = "ct2"
 
-    def __init__(self, device: str = "cpu", compute: str = "int8"):
+    def __init__(self, device: str = "cpu", compute: str = "int8", threads: int | None = None):
+        self.threads = threads  # None: one per physical core
         self.device = device
         self.compute = compute
         self.error: str | None = None  # why a GPU request fell back to CPU
@@ -82,7 +83,8 @@ class CT2Engine:
 
         models.root().mkdir(parents=True, exist_ok=True)
         local = models.bundled(model)
-        extra = {"cpu_threads": compat.cpu_threads(os.cpu_count())} if device == "cpu" else {}
+        # one thread per physical core (hyper-threads do not help CTranslate2)
+        extra = {"cpu_threads": self.threads or hardware.cpu_threads()} if device == "cpu" else {}
         return WhisperModel(str(local) if local else (models.MODELS[model]["repo"] if model in models.MODELS else model),
                             device=device, compute_type=compute, download_root=str(models.root()), **extra)
 

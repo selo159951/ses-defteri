@@ -202,7 +202,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     ready = bool(job.get("audio_ready", True)) if resume else False  # older jobs have no flag: their mp3 is whole
     store.update_job(job_id, waiting_for=None, run_started=round(t_start, 1), audio_ready=ready)
     enter("converting")
-    from . import asr, audio, chunking, diarize
+    from . import asr, audio, chunking, diarize, hardware
 
     _check(job_id)
     if ready and (jp / "audio.mp3").exists():
@@ -225,7 +225,10 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
 
     parts = job.get("parts") if resume and job.get("parts") else chunking.split(samples)
     enter("loading_model", duration=duration, parts=parts)
-    asr.load_model()
+    try:
+        asr.load_model(note=lambda n: push(stage_note=n))  # first use: a short speed test (job field stage_note)
+    finally:
+        push(stage_note=None)
     device = asr.status()["device_in_use"]
     _check(job_id)
 
@@ -252,6 +255,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
         diar["secs"] = time.time() - t0
 
     parallel = device != "cpu" and _parallel_enabled()
+    diarize.set_threads(hardware.diarize_threads(parallel=parallel))  # all cores alone, two fewer next to a GPU run
     th = threading.Thread(target=run_diar, daemon=True) if parallel else None
     if th:
         th.start()
@@ -272,7 +276,7 @@ def _parallel_enabled() -> bool:
 
 def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
                            th, diar, run_diar, dprog, push, enter, status, resume, t_start, t_decoded):
-    from . import asr, diarize
+    from . import asr, diarize, hardware
 
     enter("transcribing", device=device)
     part_dir = jp / "parts"
@@ -313,6 +317,7 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
         th.join()
     else:
         run_diar()
+    diarize.set_threads(hardware.diarize_threads())  # the refinement below runs alone
     if "error" in diar:
         raise diar["error"]
     turns = diar["turns"]

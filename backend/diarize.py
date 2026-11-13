@@ -28,10 +28,17 @@ def models_available() -> bool:
     return (d / SEG_MODEL).exists() and (d / EMB_MODEL).exists()
 
 
-import os
+from . import hardware
 
-# sherpa-onnx defaults to a single CPU thread, which makes long meetings very slow
-THREADS = max(1, min(16, (os.cpu_count() or 2) - 2))  # leave 2 cores for the UI/system
+# sherpa-onnx defaults to a single CPU thread, which makes long meetings very slow.
+# One thread per physical core (hyper-threads do not speed it up). While a graphics chip transcribes at the
+# same time the pipeline lowers this with set_threads(...) so the transcription keeps a few cores.
+THREADS = hardware.diarize_threads()
+
+
+def set_threads(n: int) -> None:
+    global THREADS
+    THREADS = max(1, int(n))
 
 
 # How far the 10 s analysis window moves each step. sherpa-onnx's default (0.1) looks at
