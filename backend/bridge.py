@@ -25,7 +25,16 @@ EXPORT_TYPES = {
     "json": "JSON (*.json)",
 }
 MEDIA_EXT = "*.mp3;*.wav;*.m4a;*.mp4;*.ogg;*.opus;*.flac;*.aac;*.webm;*.mkv;*.mov;*.wma;*.amr;*.3gp"
+MEDIA_SUFFIXES = {"." + e.split(".")[-1] for e in MEDIA_EXT.split(";")}
 MEDIA_TYPES = (f"Audio and video ({MEDIA_EXT})", "All files (*.*)")
+
+
+class SkipFile(ValueError):
+    """A file that cannot be processed. code lets the page show the message in its own language."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 
 def _first(result) -> str | None:
@@ -97,14 +106,45 @@ class Api(SystemApi, LlmApi):
         return store.rename_job(job_id, name)
 
     def start_job(self, path: str) -> dict:
-        """Start transcribing a file that is on disk (drag & drop or file picker)."""
+        """Start transcribing a file that is on disk (drag & drop or file picker).
+        The job takes the next place in the line: files are processed one at a time, first come first served."""
         src = Path(path)
+        if src.is_dir():
+            raise SkipFile("folder", f'"{src.name}" is a folder, not an audio or video file. Pick the files inside it.')
         if not src.is_file():
-            raise ValueError(f"file not found: {path}")
-        job_id = store.create_job(src.name)
+            raise SkipFile("missing", f'"{src.name}" was not found.')
+        if src.suffix.lower() not in MEDIA_SUFFIXES:
+            raise SkipFile("not_media", f'"{src.name}" is not an audio or video file, skipped.')
+        job_id = store.create_job(src.name)  # a new folder per job: the same file twice gives two separate jobs
+        store.update_job(job_id, source_path=str(src))
+        pipeline.enqueue(job_id)  # here, not in the thread: the thread start order is not reliable
         threading.Thread(target=run_job, args=(job_id, src), kwargs={"keep_source": True},
                          daemon=True).start()
         return {"id": job_id, "filename": src.name}
+
+    def start_jobs(self, paths: list) -> list:
+        """Start several files in the given order. A file that cannot be used does not stop the others:
+        it comes back as {"skipped": True, "filename", "code", "error"}."""
+        out = []
+        for p in paths or []:
+            try:
+                out.append(self.start_job(str(p)))
+            except Exception as e:
+                out.append({"skipped": True, "filename": Path(str(p)).name,
+                            "code": getattr(e, "code", "error"), "error": str(e)})
+        return out
+
+    def get_queue(self) -> dict:
+        """The recording that is processed now and the ones waiting, in the order they will run."""
+        def entry(i):
+            try:
+                return {"id": i, "filename": store.read_transcript(i)["filename"]}
+            except (OSError, ValueError):
+                return None  # removed meanwhile
+
+        cur = pipeline._current["id"]
+        return {"running": entry(cur) if cur else None,
+                "queued": [e for e in map(entry, pipeline.queue_ids()) if e]}
 
     def resume_job(self, job_id: str) -> dict:
         """Continue a job that was interrupted (app closed while it was running)."""
@@ -114,19 +154,22 @@ class Api(SystemApi, LlmApi):
         if not (store.job_path(job_id) / "audio.mp3").exists():
             raise ValueError("the audio of this recording is missing - add the file again")
         store.update_job(job_id, status="queued", stage="queued", error=None)
+        pipeline.enqueue(job_id)  # a resumed recording goes to the end of the line
         threading.Thread(target=run_job, args=(job_id, None), kwargs={"resume": True}, daemon=True).start()
         return {"id": job_id, "filename": job["filename"]}
 
-    def pick_and_start(self) -> dict:
-        """Native "Open" dialog, then start the chosen file."""
+    def pick_and_start(self) -> list:
+        """Native "Open" dialog (several files allowed), then start them all in the chosen order.
+        Returns a list (empty when the dialog was cancelled)."""
         import webview
 
-        path = _first(self._window().create_file_dialog(
-            webview.FileDialog.OPEN, directory=self._last_dir("open_dir"), file_types=MEDIA_TYPES))
-        if not path:
-            return {"cancelled": True}
-        self._remember_dir("open_dir", str(Path(path).parent))
-        return self.start_job(path)
+        res = self._window().create_file_dialog(
+            webview.FileDialog.OPEN, directory=self._last_dir("open_dir"), allow_multiple=True, file_types=MEDIA_TYPES)
+        paths = [res] if isinstance(res, str) else list(res or [])
+        if not paths:
+            return []
+        self._remember_dir("open_dir", str(Path(paths[0]).parent))
+        return self.start_jobs(paths)
 
     # ---------------- editing ----------------
     def save_edits(self, job_id: str, texts: dict | None = None, segment_speakers: dict | None = None) -> dict:

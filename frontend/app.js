@@ -95,7 +95,7 @@ function jobRow(j, q) {
   };
   const del = el("button", { textContent: t("delete"), className: "small" });
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
-  const btns = el("div", { className: "jbtns" }, ren, del);
+  const btns = el("div", { className: "jbtns" }, ren, j.status === "queued" ? "" : del); // waiting in line: cancel (below) instead of delete
   if (j.status === "running" || j.status === "queued") {
     const pz = el("button", { className: "small" }, icText("pause", t("pause")));
     pz.onclick = async () => { try { await call("pause_job", j.id); } catch {} loadJobs(); };
@@ -114,11 +114,37 @@ $("jq").oninput = () => { clearTimeout(jobsTimer); jobsTimer = setTimeout(loadJo
 for (const id of ["jStatus", "jLang", "jSort"]) $(id).onchange = loadJobs;
 
 /* Files are read from disk by path: dropped files are handled by Python (it gets the full path),
-   "browse" opens the native Open dialog. Both end up in onJobStarted. */
-window.onJobStarted = (r) => { if (r && r.id) watch(r.id, r.filename); };
-window.onJobError = (msg) => { $("progress").hidden = false; $("pfill").style.width = "0%"; $("pstage").textContent = t("upload_failed") + msg; };
+   "browse" opens the native Open dialog (several files allowed). Both end up in onJobsStarted; files are processed
+   one at a time in the order they were given. */
+let watching = null, watchState = "", batch = 0, lastQueueSig = "";
+const DEAD = ["paused", "error", "interrupted", "done"];
+window.onJobStarted = (r) => {
+  if (!r || !r.id) return;
+  batch++;
+  // do not take the box away from a recording that is really running: the box follows the running one
+  if (watching === null || watching === r.id || DEAD.includes(watchState)) watch(r.id, r.filename);
+  else loadJobs();
+};
+/* several files at once: the list comes back in the order they were started; files that cannot be used are explained */
+window.onJobsStarted = (list) => {
+  const bad = (list || []).filter((r) => r.skipped);
+  (list || []).filter((r) => r.id).forEach(window.onJobStarted);
+  if (bad.length) showNote(bad.map((r) => t("skip_" + r.code, { name: r.filename }) || r.error).join("\n"));
+  loadJobs();
+};
+function showNote(text) {
+  const n = $("pnote");
+  n.textContent = text;
+  n.hidden = false;
+  clearTimeout(showNote.t);
+  showNote.t = setTimeout(() => { n.hidden = true; }, 9000);
+}
+window.onJobError = (msg) => {
+  if (watching !== null && !DEAD.includes(watchState)) return showNote(t("upload_failed") + msg);
+  watching = null; $("progress").hidden = false; $("pfill").style.width = "0%"; $("pstage").textContent = t("upload_failed") + msg;
+};
 async function browse() {
-  try { const r = await call("pick_and_start"); if (!r.cancelled) onJobStarted(r); } catch (e) { onJobError(e.message || e); }
+  try { const r = await call("pick_and_start"); window.onJobsStarted(Array.isArray(r) ? r : r && r.id ? [r] : []); } catch (e) { onJobError(e.message || e); }
 }
 
 async function resume(id) {
@@ -135,9 +161,43 @@ $("pPause").onclick = async () => { if (watching) { try { await call("pause_job"
 $("pResume").onclick = () => { if (watching) resume(watching); };
 $("pCancel").onclick = () => { if (watching) cancelJob(watching, $("pname").textContent.split("  ·  ")[0]); };
 
-let watching = null;
+/* a waiting recording is cancelled from the queue line or its row (nothing was done for it yet, so no confirmation) */
+async function cancelQueued(id) {
+  try { await call("cancel_job", id); } catch (e) { /* already gone */ }
+  [0, 700, 2000].forEach((ms) => setTimeout(() => { loadJobs(); pollQueue(); }, ms));
+}
+
+/* "Waiting (2): a.mp4 [Cancel], b.wav [Cancel]" under the progress box */
+function renderQueue(q) {
+  const box = $("pqueue"), items = q.queued || [];
+  box.hidden = !items.length;
+  if (!items.length) return box.replaceChildren();
+  const parts = [el("span", { className: "qlabel", textContent: t("queue_waiting", { n: items.length }) + " " })];
+  items.forEach((it, i) => {
+    const b = el("button", { type: "button", className: "small qcancel", textContent: t("queue_cancel"), title: t("queue_cancel_title", { name: it.filename }) });
+    b.onclick = () => cancelQueued(it.id);
+    parts.push(el("span", { className: "qitem" }, it.filename + " ", b), i < items.length - 1 ? ", " : "");
+  });
+  box.replaceChildren(...parts);
+}
+
+/* keeps the queue line and the list fresh, and gives the box back to the running recording
+   (for instance after the one in the box was cancelled) */
+async function pollQueue() {
+  let q;
+  try { q = await call("get_queue"); } catch (e) { return; }
+  const sig = (q.running?.id || "") + "|" + (q.queued || []).map((x) => x.id).join(",");
+  if (sig !== lastQueueSig) { lastQueueSig = sig; if (!$("home").hidden) loadJobs(); }
+  renderQueue(q);
+  if (!q.running && !(q.queued || []).length && watching === null) batch = 0;
+  if (watching === null && q.running && !$("home").hidden) watch(q.running.id, q.running.filename);
+}
+setInterval(pollQueue, 1500);
+
+/* The progress box follows the recording that is really running: a queued one hands over to the running one,
+   and when the running one finishes the box moves on to the next without opening the finished page. */
 function watch(id, name) {
-  watching = id;
+  watching = id; watchState = "";
   $("progress").hidden = false; $("pname").textContent = name;
   const t0 = Date.now();
   const tick = async () => {
@@ -146,6 +206,13 @@ function watch(id, name) {
     try { j = await call("get_job", id); } catch (e) {
       if (/not found/i.test(String(e?.message || e))) { watching = null; $("progress").hidden = true; return loadJobs(); } // cancelled
       return setTimeout(tick, 2000);
+    }
+    watchState = j.status;
+    if (j.status === "queued") {
+      let q = null;
+      try { q = await call("get_queue"); } catch (e) { /* try again next second */ }
+      if (watching !== id) return;
+      if (q?.running && q.running.id !== id) return watch(q.running.id, q.running.filename);
     }
     const paused = j.status === "paused";
     $("pPause").hidden = paused; $("pResume").hidden = !paused;
@@ -162,7 +229,7 @@ function watch(id, name) {
       return loadJobs();
     }
     if (j.status === "error") { $("pstage").textContent = t("error") + ": " + j.error; return loadJobs(); }
-    if (j.status === "done") { $("progress").hidden = true; loadJobs(); return openJob(id); }
+    if (j.status === "done") return finished(id);
     const dev = { cuda: "NVIDIA GPU", vulkan: "GPU (Vulkan)", cpu: "CPU" }[j.device];
     $("pname").textContent = dev ? `${name}  ·  ${dev}` : name;
     const parts = j.parts?.length > 1 ? " " + t("part_n", { i: j.part || 1, n: j.parts.length }) : "";
@@ -174,6 +241,18 @@ function watch(id, name) {
     setTimeout(tick, 1000);
   };
   tick();
+}
+
+async function finished(id) {
+  loadJobs();
+  let q = { queued: [] };
+  try { q = await call("get_queue"); } catch (e) { /* treat as empty */ }
+  const next = q.running || (q.queued || [])[0];
+  if (next) return watch(next.id, next.filename); // more are waiting: go on, do not jump into the finished page
+  const n = batch;
+  batch = 0; watching = null; watchState = "";
+  $("progress").hidden = true; $("pqueue").hidden = true;
+  if (n <= 1) openJob(id); // one file in this round: show it as before
 }
 
 /* ================= transcript state ================= */

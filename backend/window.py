@@ -47,18 +47,19 @@ def install_virtual_hosts() -> None:
 
 
 def attach_file_drop(window, api) -> None:
-    """Dropped files arrive with their full path (pywebview DOM events); start a job for each."""
+    """Dropped files arrive with their full path (pywebview DOM events); all of them are queued in dropped order."""
     from webview.dom import DOMEventHandler
 
     def on_drop(event):
-        for f in (event.get("dataTransfer") or {}).get("files", []):
-            path = f.get("pywebviewFullPath")
-            if not path:
-                continue
-            try:
-                res = api.start_job(path)
-                window.evaluate_js(f"window.onJobStarted && window.onJobStarted({json.dumps(res)})")
-            except Exception as e:  # shown to the user
-                window.evaluate_js(f"window.onJobError && window.onJobError({json.dumps(str(e))})")
+        paths = [f.get("pywebviewFullPath") for f in (event.get("dataTransfer") or {}).get("files", [])]
+        paths = [p for p in paths if p]
+        try:
+            if not paths:
+                res = [{"skipped": True, "filename": "", "code": "not_file", "error": "That is not a file. Drop an audio or video file."}]
+            else:
+                res = api.start_jobs(paths)  # in dropped order; a bad file is reported, the rest go on
+        except Exception as e:  # shown to the user
+            res = [{"skipped": True, "filename": "", "code": "error", "error": str(e)}]
+        window.evaluate_js(f"window.onJobsStarted && window.onJobsStarted({json.dumps(res)})")
 
     window.dom.document.events.drop += DOMEventHandler(on_drop, prevent_default=True, stop_propagation=True)

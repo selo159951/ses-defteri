@@ -1,6 +1,7 @@
 """Job storage: one folder per job under the app-data dir."""
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -12,6 +13,15 @@ from pathlib import Path
 
 _lock = threading.RLock()  # re-entrant: update_job holds it across read + write
 _log = logging.getLogger(__name__)
+
+
+def _locked(fn):
+    """Read-modify-write functions: no other thread may write between the read and the write."""
+    @functools.wraps(fn)
+    def inner(*a, **kw):
+        with _lock:
+            return fn(*a, **kw)
+    return inner
 
 
 APP_DIR = "SesDefteri"
@@ -111,10 +121,20 @@ def read_transcript(job_id: str) -> dict:
 
 def write_transcript(job_id: str, data: dict) -> None:
     p = job_path(job_id) / "transcript.json"
-    tmp = p.with_suffix(".tmp")
+    tmp = p.with_name(f"transcript.{uuid.uuid4().hex[:8]}.tmp")  # never shared between writers
     with _lock:
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
-        os.replace(tmp, p)
+        try:
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+            for attempt in range(10):  # Windows: a reader holding the file open makes replace fail for a moment
+                try:
+                    os.replace(tmp, p)
+                    return
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.02)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def update_job(job_id: str, **fields) -> dict:
@@ -161,7 +181,8 @@ def list_jobs(q: str = "") -> list[dict]:
         if not f.exists():
             continue
         try:
-            d = json.loads(f.read_text("utf-8"))
+            with _lock:
+                d = json.loads(f.read_text("utf-8"))
         except Exception:
             continue
         segs = d.get("segments") or []
@@ -198,9 +219,11 @@ def rename_job(job_id: str, name: str) -> dict:
 
 
 def delete_job(job_id: str) -> None:
-    shutil.rmtree(job_path(job_id), ignore_errors=True)
+    with _lock:
+        shutil.rmtree(job_path(job_id), ignore_errors=True)
 
 
+@_locked
 def split(job_id: str, seg_id: int, a: int, b: int, speaker: int) -> dict:
     from .merge import split_segment
 
@@ -216,6 +239,7 @@ def split(job_id: str, seg_id: int, a: int, b: int, speaker: int) -> dict:
     return data
 
 
+@_locked
 def apply_detected_names(job_id: str) -> tuple[dict, dict]:
     """Fill in names for speakers that still have a default 'Speaker N' label."""
     from .names import detect_names
@@ -227,6 +251,7 @@ def apply_detected_names(job_id: str) -> tuple[dict, dict]:
     return data, found
 
 
+@_locked
 def replace_transcript(job_id: str, segments: list[dict], speakers: dict) -> dict:
     """Save the whole edited transcript (add/delete/merge lines, undo).
 
@@ -270,6 +295,7 @@ def _learn(seg: dict, new_text: str) -> None:
         pass  # learning is a bonus, saving the edit must never fail
 
 
+@_locked
 def save_edits(job_id: str, edits: dict[int, str] | None = None, speakers: dict | None = None,
                segment_speakers: dict[int, int] | None = None) -> dict:
     """Edits only touch text_edited / speaker labels; text_original is never modified."""

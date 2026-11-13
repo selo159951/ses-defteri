@@ -772,12 +772,24 @@ _wlock = threading.Lock()
 
 
 def _loop() -> None:
+    from .pipeline import _queue_lock  # the analysis model and the speech model never work at the same time
+
     while True:
         job_id = _q.get()
         ev = _events.get(job_id) or threading.Event()
+        got = False
         try:
-            run(job_id, ev)
+            while not got and not ev.is_set():  # waiting for the transcription in progress; cancel still works
+                got = _queue_lock.acquire(timeout=0.3)
+            if got:
+                run(job_id, ev)
+            else:
+                _set(job_id, state="cancelled", error="")
+        except (OSError, ValueError):
+            pass  # the recording was deleted meanwhile
         finally:
+            if got:
+                _queue_lock.release()
             _events.pop(job_id, None)
 
 

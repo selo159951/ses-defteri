@@ -16,6 +16,11 @@ button.small { padding:1px 8px; font-size:12px; }
 #drop .big { font-size:18px; margin:0 0 8px; } .link { color:var(--accent); cursor:pointer; text-decoration:underline; }
 #pbtns { display:flex; gap:6px; margin-top:6px; }
 #progress { margin:16px 0; } .bar { height:10px; background:var(--line); border-radius:5px; overflow:hidden; margin:6px 0; }
+#pqueue { margin-top:10px; font-size:13px; color:var(--muted); line-height:2; }
+#pqueue .qitem { white-space:nowrap; color:var(--fg); }
+#pqueue .qcancel { margin-left:2px; }
+#pqueue .qcancel:hover:not(:disabled) { border-color:#c0392b; color:#c0392b; }
+#pnote { white-space:pre-line; margin:16px 0 0; padding:10px 16px; border-radius:8px; border:1px solid var(--hitcur); background:var(--s2); color:var(--fg); font-size:14px; }
 #pfill { height:100%; width:0; background:var(--accent); transition:width .4s; }
 #pfill.indeterminate { width:30% !important; animation:slide 1.2s infinite ease-in-out; }
 @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }

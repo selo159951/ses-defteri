@@ -19,10 +19,33 @@ from .merge import Word, assign_speakers, build_segments
 SR = 16000
 _queue_lock = threading.Lock()  # one heavy job at a time
 _stop: dict[str, str] = {}  # job id -> "pause" | "cancel", set by request_stop, cleared when the job ends
+_current: dict[str, str | None] = {"id": None}  # the job that holds the queue lock
+_order: list[str] = []  # waiting jobs, first in first out (the head goes next)
+_order_lock = threading.Lock()
 
 
 class JobStopped(Exception):
     """Raised inside a running job when the user paused or cancelled it."""
+
+
+def enqueue(job_id: str) -> None:
+    """Take a place at the end of the line. Called in submission order (before the job's thread is
+    started), which is what makes the processing order first-in-first-out."""
+    with _order_lock:
+        if job_id not in _order:
+            _order.append(job_id)
+
+
+def _leave_line(job_id: str) -> None:
+    with _order_lock:
+        if job_id in _order:
+            _order.remove(job_id)
+
+
+def queue_ids() -> list[str]:
+    """Jobs that are waiting for their turn, in the order they will run (the running one is not in it)."""
+    with _order_lock:
+        return list(_order)
 
 
 def request_stop(job_id: str, mode: str) -> None:
@@ -39,13 +62,37 @@ def _check_stop(job_id: str) -> None:
         raise JobStopped(_stop[job_id])
 
 
+def _wait_for_turn(job_id: str) -> None:
+    """Wait until this job is first in line and the queue lock is free. A queued job stays stoppable:
+    a paused or cancelled one raises JobStopped and just leaves the line."""
+    while True:
+        _check_stop(job_id)
+        with _order_lock:
+            is_head = not _order or _order[0] == job_id or job_id not in _order
+        if is_head and _queue_lock.acquire(timeout=0.2):
+            break
+        if not is_head:
+            time.sleep(0.2)
+    try:
+        _check_stop(job_id)
+    except BaseException:
+        _queue_lock.release()
+        raise
+
+
 def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: bool = False) -> None:
     """keep_source=True: src is the user's own file and must never be deleted."""
     t_start = time.time()
+    enqueue(job_id)  # no-op when the caller already did (start_job / resume_job do, to keep the order)
+    held = False
     try:
-        with _queue_lock:
-            _check_stop(job_id)  # a queued job can be paused or cancelled before it starts
-            _run(job_id, src, resume, t_start)
+        _wait_for_turn(job_id)
+        held = True
+        with _order_lock:  # now running: no longer "waiting"
+            _current["id"] = job_id
+            if job_id in _order:
+                _order.remove(job_id)
+        _run(job_id, src, resume, t_start)
         _stop.pop(job_id, None)
     except JobStopped:
         mode = _stop.pop(job_id, "pause")  # flag cleared first: a resume right after must not see it
@@ -62,6 +109,10 @@ def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: boo
         else:
             _fail(job_id, e)
     finally:
+        _leave_line(job_id)
+        if held:
+            _current["id"] = None
+            _queue_lock.release()
         if src is not None and not keep_source:  # only temporary copies are removed
             try:
                 Path(src).unlink(missing_ok=True)
