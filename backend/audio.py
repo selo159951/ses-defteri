@@ -13,7 +13,7 @@ def decode(src: Path) -> tuple[np.ndarray, float]:
     return convert(src, None)
 
 
-def convert(src: Path, playback_mp3: Path | None) -> tuple[np.ndarray, float]:
+def convert(src: Path, playback_mp3: Path | None, progress=None) -> tuple[np.ndarray, float]:
     """Return (float32 mono 16 kHz samples, duration seconds); also writes playback_mp3 if given."""
     chunks: list[np.ndarray] = []
     try:
@@ -39,7 +39,12 @@ def convert(src: Path, playback_mp3: Path | None) -> tuple[np.ndarray, float]:
                         for pkt in ostream.encode(f):
                             out.mux(pkt)
 
+            total = float(inp.duration) / 1e6 if inp.duration else 0.0  # seconds, for the progress report
+            last = -1.0
             for frame in inp.decode(stream):
+                if progress and total and frame.time is not None and frame.time - last >= 1.0:
+                    last = frame.time
+                    progress(min(frame.time / total, 1.0))
                 frame.pts = None
                 take(res16.resample(frame))
             take(res16.resample(None))

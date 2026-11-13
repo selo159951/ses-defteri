@@ -40,7 +40,7 @@ async function loadJobs() {
   lf.replaceChildren(new Option(t("all_languages"), ""), ...langs.map((l) => new Option(l.toUpperCase(), l)));
   lf.value = langs.includes(curLang) ? curLang : "";
   const st = $("jStatus").value, lang = lf.value;
-  list = list.filter((j) => (!st || (st === "running" ? ["running", "queued"].includes(j.status) : j.status === st)) && (!lang || j.language === lang));
+  list = list.filter((j) => (!st || (st === "running" ? ["running", "queued", "paused"].includes(j.status) : j.status === st)) && (!lang || j.language === lang));
   const sorters = {
     new: (a, b) => b.created - a.created, old: (a, b) => a.created - b.created,
     name: (a, b) => a.filename.localeCompare(b.filename, LANG),
@@ -60,7 +60,7 @@ function jobRow(j, q) {
   };
   const title = el("a", { href: "#", className: "jtitle" }, ...marked(j.filename, j.name_match ? q : ""));
   title.onclick = (e) => { e.preventDefault(); open(); };
-  const status = { done: "st_done", error: "st_error", running: "st_running", queued: "st_queued", interrupted: "st_interrupted" }[j.status];
+  const status = { done: "st_done", error: "st_error", running: "st_running", queued: "st_queued", interrupted: "st_interrupted", paused: "st_paused" }[j.status];
   const meta = [new Date(j.created * 1000).toLocaleString(LANG), j.duration ? mmss(j.duration) : null,
     j.language?.toUpperCase(), j.speakers?.length ? j.speakers.map(displayName).join(", ") : null,
     j.lines ? plural(j.lines, "line_1", "lines_n") + (j.edited ? " · " + t("edited_n", { n: j.edited }) : "") : null]
@@ -96,7 +96,7 @@ function jobRow(j, q) {
   const del = el("button", { textContent: t("delete"), className: "small" });
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
   const btns = el("div", { className: "jbtns" }, ren, del);
-  if (j.status === "interrupted") {
+  if (j.status === "interrupted" || j.status === "paused") {
     const res = el("button", { textContent: t("resume"), className: "small primary" });
     res.onclick = () => resume(j.id);
     btns.prepend(res);
@@ -109,7 +109,7 @@ for (const id of ["jStatus", "jLang", "jSort"]) $(id).onchange = loadJobs;
 /* Files are read from disk by path: dropped files are handled by Python (it gets the full path),
    "browse" opens the native Open dialog. Both end up in onJobStarted. */
 window.onJobStarted = (r) => { if (r && r.id) watch(r.id, r.filename); };
-window.onJobError = (msg) => { $("progress").hidden = false; $("pfill").style.width = "0%"; $("pstage").textContent = t("upload_failed") + msg; };
+window.onJobError = (msg) => { watching = null; $("progress").hidden = false; window.showProgressError(t("upload_failed") + msg); };
 async function browse() {
   try { const r = await call("pick_and_start"); if (!r.cancelled) onJobStarted(r); } catch (e) { onJobError(e.message || e); }
 }
@@ -119,31 +119,22 @@ async function resume(id) {
 }
 
 let watching = null;
+/* The progress box itself (steps, buttons, texts) is drawn by renderProgress() in simple-progress.js. */
 function watch(id, name) {
   watching = id;
-  $("progress").hidden = false; $("pname").textContent = name;
-  const t0 = Date.now();
+  $("progress").hidden = false;
+  window.progressStart(id, name);
   const tick = async () => {
-    if (watching !== id) return; // another file took over the progress box
+    if (watching !== id) return; // another file took over the progress box, or it was cancelled
     let j;
-    try { j = await call("get_job", id); } catch { return setTimeout(tick, 2000); }
-    const secs = Math.round((Date.now() - t0) / 1000);
-    const asrP = j.progress || 0, diaP = j.dprogress || 0;
-    const active = j.stage === "transcribing" || j.stage === "diarizing";
-    // transcription and speaker separation can run at the same time; show both
-    const overall = active ? 0.6 * asrP + 0.4 * diaP : j.stage === "done" ? 1 : 0.03;
-    $("pfill").style.width = Math.round(overall * 100) + "%";
-    $("pfill").classList.toggle("indeterminate", !active && j.status === "running");
-    if (j.status === "error") { $("pstage").textContent = t("error") + ": " + j.error; return loadJobs(); }
+    try { j = await call("get_job", id); } catch (e) {
+      if (/not found/.test(String(e?.message || e))) { watching = null; $("progress").hidden = true; return loadJobs(); }
+      return setTimeout(tick, 2000);
+    }
+    if (watching !== id) return;
     if (j.status === "done") { $("progress").hidden = true; loadJobs(); return openJob(id); }
-    const dev = { cuda: "NVIDIA GPU", vulkan: "GPU (Vulkan)", cpu: "CPU" }[j.device];
-    $("pname").textContent = dev ? `${name}  ·  ${dev}` : name;
-    const parts = j.parts?.length > 1 ? " " + t("part_n", { i: j.part || 1, n: j.parts.length }) : "";
-    const bits = active
-      ? [`${t("stage_transcribing")} ${Math.round(asrP * 100)}%${parts}`, diaP > 0 || j.stage === "diarizing" ? `${t("stage_diarizing")} ${Math.round(diaP * 100)}%` : null]
-      : [t("stage_" + j.stage)];
-    const eta = window.etaText?.(j, secs, overall);
-    $("pstage").textContent = `${bits.filter(Boolean).join("  ·  ")}  (${fmt(secs)} ${t("elapsed")})` + (eta ? `  ·  ${eta}` : "");
+    window.renderProgress(j, name);
+    if (["error", "paused", "interrupted"].includes(j.status)) return loadJobs();
     setTimeout(tick, 1000);
   };
   tick();

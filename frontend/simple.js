@@ -6,6 +6,7 @@ Object.assign(I18N.tr, {
   browse: "dosya seç", jq_ph: "Kayıtlarda ara",
   eta_total: "yaklaşık {d} sürecek", eta_left: "yaklaşık {d} kaldı",
   dur_s: "{n} saniye", dur_m: "{n} dakika", dur_h: "{h} saat {m} dakika",
+  st_paused: "Duraklatıldı", st_queued: "Sırada", resume: "Devam et",
 });
 Object.assign(I18N.en, {
   app: "Ses Defteri",

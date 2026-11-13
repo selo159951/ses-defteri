@@ -40,3 +40,73 @@ header h1 { font-size: 24px; }
 #player button, #player select { font-size: 17px; }
 .seg select { width: 100%; min-width: 0; font-size: 15px; padding-left: 6px; padding-right: 2px; }
 #title { overflow-wrap: anywhere; }
+
+/* ---- progress box: step list ---- */
+#progress { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 26px; margin: 20px 0; }
+#progress.paused { border-color: var(--hitcur); }
+#progress.failed { border-color: #dc2626; }
+#pname { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; margin-bottom: 4px; }
+#pstage { font-size: 19px; font-weight: 600; padding: 10px 14px; margin: 10px 0; border-radius: 10px; background: var(--s2); }
+#pstage[hidden] { display: none; }
+#progress.failed #pstage { background: var(--s3); }
+#psteps { list-style: none; margin: 14px 0 10px; padding: 0; }
+#psteps[hidden] { display: none; }
+.step { display: flex; gap: 14px; align-items: flex-start; padding: 9px 0; font-size: 21px; color: var(--muted); }
+.step .sico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; }
+.step .sbody { flex: 1; min-width: 0; }
+.step .stitle { display: block; }
+.step .sdetail { display: block; font-size: 18px; margin-top: 3px; }
+.step .ring { width: 18px; height: 18px; border: 2px solid var(--line); border-radius: 50%; }
+.step.now { color: var(--fg); font-weight: 700; }
+.step.now .sdetail, .step.paused .sdetail { font-weight: 500; color: var(--fg); }
+.step.paused { color: var(--fg); font-weight: 700; }
+.step.paused .ring { border-color: var(--hitcur); background: var(--hit); }
+.step.done { color: var(--fg); }
+.step.done .sico { color: #fff; }
+.step.done .sico .ic { width: 28px; height: 28px; padding: 5px; box-sizing: border-box; background: var(--added); border-radius: 50%; stroke-width: 3; }
+.step .spin { width: 22px; height: 22px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.smini { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; margin-top: 8px; position: relative; max-width: 520px; }
+.smini[hidden] { display: none; }
+.smini > div { height: 100%; width: 0; background: var(--accent); border-radius: 5px; transition: width .4s; }
+.smini.indeterminate > div { width: 30% !important; animation: slide 1.2s infinite ease-in-out; }
+#pfill { background: var(--accent); }
+#progress > .bar { height: 14px; margin: 14px 0 8px; }
+#pinfo { font-size: 20px; min-height: 1.4em; }
+#palive { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; margin-top: 8px; color: var(--accent); }
+#palive[hidden] { display: none; }
+#palive.stale { color: #b45309; }
+#palive .pulse { width: 16px; height: 16px; flex: none; border-radius: 50%; background: currentColor; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(.55); opacity: .45; } 50% { transform: scale(1); opacity: 1; } }
+#pbtns { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+#pbtns:empty { display: none; }
+.pbtn { font-size: 22px; font-weight: 600; padding: 14px 30px; border-radius: 12px; display: inline-flex; align-items: center; gap: 10px; min-width: 170px; justify-content: center; }
+.pbtn .ic { width: 24px; height: 24px; }
+.pbtn.ppause, .pbtn.presume { background: var(--accent); color: #fff; border-color: transparent; }
+.pbtn.pcancel { border-color: #dc2626; color: #dc2626; }
+.pbtn.pcancel:hover:not(:disabled) { background: #dc2626; color: #fff; border-color: #dc2626; }
+@media (prefers-reduced-motion: reduce) { .spin, .pulse, .smini.indeterminate > div { animation-duration: 3s; } }
+
+/* ---- first-run tour: bigger and calmer ---- */
+#tourBtn { font-size: 18px; padding: 8px 16px; }
+.tour-card { font-size: 19px; padding: 22px 26px; }
+.tour-card h3 { font-size: 24px; margin-bottom: 10px; }
+.tour-card p { line-height: 1.5; margin-bottom: 20px; }
+.tour-count { font-size: 15px; }
+.tour-btns button { font-size: 19px; padding: 10px 20px; border-radius: 10px; }
+.tour-btns .primary { background: var(--accent); color: #fff; border-color: transparent; }
+
+/* while a recording is processed the progress box (with its buttons) must fit on screen */
+#home:has(#progress:not([hidden])) #drop { padding: 18px 24px; }
+#home:has(#progress:not([hidden])) #drop .big { font-size: 22px; margin-bottom: 10px; }
+#home:has(#progress:not([hidden])) #drop .pickbtn { font-size: 19px; padding: 9px 26px; }
+#home:has(#progress:not([hidden])) #drop .simplehint { display: none; }
+#progress { padding: 16px 24px; margin: 14px 0; }
+#pbtns { margin: 8px 0 6px; }
+.pbtn { padding: 10px 24px; font-size: 21px; }
+.step { padding: 4px 0; font-size: 20px; }
+.step .sdetail { font-size: 17px; margin-top: 1px; }
+.smini { margin-top: 5px; height: 8px; }
+#psteps { margin: 6px 0; }
+#progress > .bar { margin: 8px 0 6px; }
+#palive { margin-top: 4px; }

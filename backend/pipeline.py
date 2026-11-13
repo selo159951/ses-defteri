@@ -19,19 +19,104 @@ from .merge import Word, assign_speakers, build_segments
 SR = 16000
 _queue_lock = threading.Lock()  # one heavy job at a time
 
+# ---- pause / cancel ----
+_stop: dict[str, str] = {}              # job id -> "pause" | "cancel" (asked for, not done yet)
+_active: set[str] = set()               # jobs that have a run_job thread (queued or running)
+_cancel_events: dict[str, threading.Event] = {}  # lets request_stop stop the speaker separation at once
+_current: dict[str, str | None] = {"id": None}   # the job that holds the queue lock
+
+
+class JobStopped(Exception):
+    """Raised inside a job when the user asked to pause or cancel it."""
+
+    def __init__(self, mode: str):
+        super().__init__(mode)
+        self.mode = mode
+
+
+def is_active(job_id: str) -> bool:
+    return job_id in _active
+
+
+def request_stop(job_id: str, mode: str) -> bool:
+    """mode: "pause" (keep the finished parts, can be resumed) or "cancel" (remove the job).
+    Returns False when the job is not being processed at the moment."""
+    if mode not in ("pause", "cancel"):
+        raise ValueError("mode must be pause or cancel")
+    if job_id not in _active:
+        return False
+    _stop[job_id] = mode
+    ev = _cancel_events.get(job_id)
+    if ev:
+        ev.set()
+    return True
+
+
+def _check(job_id: str) -> None:
+    mode = _stop.get(job_id)
+    if mode:
+        raise JobStopped(mode)
+
+
+def _heartbeat(job_id: str, done: threading.Event) -> None:
+    """The page shows "working" from this: it changes every 2 s while the job really runs."""
+    while not done.wait(2.0):
+        try:
+            store.update_job(job_id, heartbeat=round(time.time(), 1))
+        except Exception:  # job removed meanwhile
+            return
+
+
+def _wait_for_turn(job_id: str) -> None:
+    """Take the queue lock; while another recording is processed say which one, and stay stoppable."""
+    announced = False
+    while not _queue_lock.acquire(timeout=0.5):
+        _check(job_id)
+        if not announced:
+            announced = True
+            other = _current["id"]
+            try:
+                name = store.read_transcript(other)["filename"] if other else ""
+            except Exception:
+                name = ""
+            store.update_job(job_id, waiting_for=name or "?")
+    try:
+        _check(job_id)
+    except BaseException:
+        _queue_lock.release()
+        raise
+
 
 def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: bool = False) -> None:
     """keep_source=True: src is the user's own file and must never be deleted."""
     t_start = time.time()
+    _active.add(job_id)
+    hb_done = threading.Event()
+    held = False
     try:
-        with _queue_lock:
-            _run(job_id, src, resume, t_start)
+        _wait_for_turn(job_id)
+        held = True
+        _current["id"] = job_id
+        threading.Thread(target=_heartbeat, args=(job_id, hb_done), daemon=True).start()
+        _run(job_id, src, resume, t_start)
+    except JobStopped as e:
+        _finish_stop(job_id, e.mode)
     except ValueError as e:  # user-facing problems (bad file etc.)
-        store.update_job(job_id, status="error", stage="error", error=str(e))
+        _safe_update(job_id, status="error", stage="error", error=str(e), waiting_for=None)
     except Exception as e:  # surfaced in UI
+        if job_id in _stop:  # e.g. the separation was cancelled because of the stop request
+            _finish_stop(job_id, _stop[job_id])
+            return
         traceback.print_exc()
-        store.update_job(job_id, status="error", stage="error", error=f"{type(e).__name__}: {e}")
+        _safe_update(job_id, status="error", stage="error", error=f"{type(e).__name__}: {e}", waiting_for=None)
     finally:
+        hb_done.set()
+        if held:
+            _current["id"] = None
+            _queue_lock.release()
+        _stop.pop(job_id, None)
+        _cancel_events.pop(job_id, None)
+        _active.discard(job_id)
         if src is not None and not keep_source:  # only temporary copies are removed
             try:
                 Path(src).unlink(missing_ok=True)
@@ -39,37 +124,84 @@ def run_job(job_id: str, src: Path | None, keep_source: bool = True, resume: boo
                 pass
 
 
-def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
-    from . import asr, audio, chunking, diarize
+def _safe_update(job_id: str, **fields) -> None:
+    try:
+        store.update_job(job_id, **fields)
+    except (OSError, ValueError):  # job folder is gone
+        pass
 
+
+def _finish_stop(job_id: str, mode: str) -> None:
+    if mode == "cancel":
+        try:
+            store.delete_job(job_id)
+        except (OSError, ValueError):
+            pass
+        return
+    jp = store.job_path(job_id)
+    try:
+        if not store.read_transcript(job_id).get("audio_ready"):
+            (jp / "audio.mp3").unlink(missing_ok=True)  # half written, redone on resume
+        store.update_job(job_id, status="paused", stage="paused", waiting_for=None)
+    except (OSError, ValueError):
+        pass
+
+
+def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     jp = store.job_path(job_id)
     job = store.read_transcript(job_id)
-    status = {"stage": "converting", "progress": 0.0, "dprogress": 0.0}
+    status = {"stage": "converting", "progress": 0.0, "dprogress": 0.0, "cprogress": 0.0}
 
     def push(**extra):
-        store.update_job(job_id, status="running", stage=status["stage"],
-                         progress=round(status["progress"], 3), dprogress=round(status["dprogress"], 3), **extra)
+        store.update_job(job_id, status="running", stage=status["stage"], progress=round(status["progress"], 3),
+                         dprogress=round(status["dprogress"], 3), cprogress=round(status["cprogress"], 3),
+                         heartbeat=round(time.time(), 1), **extra)
 
-    push()
-    if resume and (jp / "audio.mp3").exists():
+    def enter(stage: str, **extra):
+        status["stage"] = stage
+        push(stage_started=round(time.time(), 1), **extra)
+
+    # Show "converting" at once: the imports below (speech and speaker libraries) take many seconds
+    # on a cold start, and until now the job still said "queued" during all of that.
+    ready = bool(job.get("audio_ready", True)) if resume else False  # older jobs have no flag: their mp3 is whole
+    store.update_job(job_id, waiting_for=None, run_started=round(t_start, 1), audio_ready=ready)
+    enter("converting")
+    from . import asr, audio, chunking, diarize
+
+    _check(job_id)
+    if ready and (jp / "audio.mp3").exists():
         samples, duration = audio.decode(jp / "audio.mp3")
     else:
-        samples, duration = audio.convert(src, jp / "audio.mp3")
+        src = src or (Path(job["source_path"]) if job.get("source_path") else None)
+        if src is None or not Path(src).is_file():
+            raise ValueError("the original file is missing - add the file again")
+
+        def cprog(p):
+            status["cprogress"] = p
+            push()
+            _check(job_id)
+
+        samples, duration = audio.convert(src, jp / "audio.mp3", cprog)
+        store.update_job(job_id, audio_ready=True)
+    status["cprogress"] = 1.0
     t_decoded = time.time()
+    _check(job_id)
 
     parts = job.get("parts") if resume and job.get("parts") else chunking.split(samples)
-    status["stage"] = "loading_model"
-    push(duration=duration, parts=parts)
+    enter("loading_model", duration=duration, parts=parts)
     asr.load_model()
     device = asr.status()["device_in_use"]
+    _check(job_id)
 
     # Speakers are found on the whole recording (so a voice keeps one label across parts).
     # With a GPU doing the transcription, the CPU is free: run both at the same time.
     diar: dict = {}
-    cancel = threading.Event()  # stops speaker separation if transcription fails
+    cancel = threading.Event()  # stops speaker separation if transcription fails or the user stops
+    _cancel_events[job_id] = cancel
     last_d = [0.0]
 
     def dprog(p):
+        _check(job_id)
         status["dprogress"] = p
         if p - last_d[0] >= 0.02:
             last_d[0] = p
@@ -89,9 +221,11 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
         th.start()
     try:
         return _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
-                                      th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded)
+                                      th, diar, run_diar, dprog, push, enter, status, resume, t_start, t_decoded)
     finally:
         cancel.set()  # no-op when finished; stops a still running separation after an error
+        if th:
+            th.join(timeout=15)
 
 
 def _parallel_enabled() -> bool:
@@ -101,11 +235,10 @@ def _parallel_enabled() -> bool:
 
 
 def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
-                           th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded):
+                           th, diar, run_diar, dprog, push, enter, status, resume, t_start, t_decoded):
     from . import asr, diarize
 
-    status["stage"] = "transcribing"
-    push(device=device)
+    enter("transcribing", device=device)
     part_dir = jp / "parts"
     part_dir.mkdir(exist_ok=True)
     words: list[Word] = []
@@ -115,11 +248,14 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     if not (resume and (part_dir / "0.json").exists()) or True:
         asr.detect_languages(samples)  # which language(s) the whole recording is in (one cheap pass)
     for i, (a, b) in enumerate(parts):
+        _check(job_id)
+        push(part=i + 1)
         f = part_dir / f"{i}.json"
         if resume and f.exists():  # already done before the app was closed
             saved = json.loads(f.read_text("utf-8"))
         else:
             def tprog(p, a=a, b=b):
+                _check(job_id)
                 status["progress"] = (a + p * (b - a)) / duration
                 if status["progress"] - last_t[0] >= 0.01:
                     last_t[0] = status["progress"]
@@ -135,8 +271,8 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     asr_secs = time.time() - t_asr
     language = langs.most_common(1)[0][0] if langs else None
 
-    status["stage"] = "diarizing"
-    push(language=language)
+    _check(job_id)
+    enter("diarizing", language=language)
     if th:
         th.join()
     else:
@@ -161,7 +297,7 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     benchmarks.record(timings, resumed=resume)  # feeds the remaining-time estimates
     store.update_job(
         job_id, status="done", stage="done", progress=1.0, dprogress=1.0, segments=segments,
-        mixed=False, glossary_changes=[], speakers=speakers, timings=timings,
+        mixed=False, waiting_for=None, glossary_changes=[], speakers=speakers, timings=timings,
         # frozen copy of the model output for the "Original" export
         original_segments=[{k: s[k] for k in ("start", "end", "speaker", "text_original")} for s in segments],
     )

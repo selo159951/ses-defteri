@@ -20,6 +20,7 @@
 <script src="icons.js"></script>
 <header><h1 data-i18n="app">Ses Defteri</h1><button id="homeBtn" hidden data-icon="arrow-left" data-i18n="all_recordings"></button>
   <span class="spacer"></span>
+  <button id="tourBtn" type="button">Nasıl kullanılır?</button>
   <button id="peopleBtn" data-i18n="people"></button>
   <select id="langSel"data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select>
   <button id="aboutBtn" class="icon" data-icon="info" data-i18n-title="about_title"></button>
@@ -40,8 +41,12 @@
   </div>
   <section id="progress" hidden>
     <div id="pname"></div>
+    <div id="pbtns"></div>
+    <div id="pstage" role="status" aria-live="polite"></div>
+    <ol id="psteps"></ol>
     <div class="bar"><div id="pfill"></div></div>
-    <div id="pstage"></div>
+    <div id="pinfo"></div>
+    <div id="palive"><span class="pulse"></span><span id="paliveText"></span></div>
   </section>
   <div class="listhead">
     <h2><span data-i18n="prev_recordings"></span> <span id="jobCount"></span></h2>
@@ -164,5 +169,7 @@
 <script src="i18n.js"></script>
 <script src="simple.js"></script>
 <script src="app.js"></script>
+<script src="simple-progress.js"></script>
+<script src="simple-tour.js"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 from . import asr, export, store
+from . import pipeline
 from .pipeline import run_job
 from .llm_api import LlmApi
 from .system_api import SystemApi
@@ -82,20 +83,43 @@ class Api(SystemApi, LlmApi):
         if not src.is_file():
             raise ValueError(f"file not found: {path}")
         job_id = store.create_job(src.name)
+        store.update_job(job_id, source_path=str(src))  # lets a paused job start over if it stopped while converting
         threading.Thread(target=run_job, args=(job_id, src), kwargs={"keep_source": True},
                          daemon=True).start()
         return {"id": job_id, "filename": src.name}
 
     def resume_job(self, job_id: str) -> dict:
-        """Continue a job that was interrupted (app closed while it was running)."""
+        """Continue a job that was paused or interrupted (app closed while it was running)."""
         job = _job(job_id)
-        if job["status"] not in ("interrupted", "error"):
-            raise ValueError("this recording is not interrupted")
-        if not (store.job_path(job_id) / "audio.mp3").exists():
+        if job["status"] not in ("interrupted", "error", "paused"):
+            raise ValueError("this recording is not paused")
+        if pipeline.is_active(job_id):
+            raise ValueError("this recording is still being processed")
+        has_audio = job.get("audio_ready", True) and (store.job_path(job_id) / "audio.mp3").exists()
+        source = job.get("source_path")
+        if not has_audio and not (source and Path(source).is_file()):
             raise ValueError("the audio of this recording is missing - add the file again")
-        store.update_job(job_id, status="queued", stage="queued", error=None)
+        pipeline._stop.pop(job_id, None)
+        store.update_job(job_id, status="queued", stage="queued", error=None, waiting_for=None)
         threading.Thread(target=run_job, args=(job_id, None), kwargs={"resume": True}, daemon=True).start()
         return {"id": job_id, "filename": job["filename"]}
+
+    def pause_job(self, job_id: str) -> dict:
+        """Stop after the current step; finished parts are kept and "resume_job" continues."""
+        _job(job_id)
+        if not pipeline.request_stop(job_id, "pause"):
+            raise ValueError("this recording is not being processed")
+        return {"ok": True}
+
+    def cancel_job(self, job_id: str) -> dict:
+        """Stop and remove a recording that is queued, running or paused."""
+        job = _job(job_id)
+        if pipeline.request_stop(job_id, "cancel"):
+            return {"ok": True, "pending": True}
+        if job["status"] == "done":
+            raise ValueError("this recording is finished - delete it instead")
+        store.delete_job(job_id)
+        return {"ok": True}
 
     def pick_and_start(self) -> dict:
         """Native "Open" dialog, then start the chosen file."""
