@@ -31,7 +31,9 @@
     <p><span data-i18n="or"></span> <a href="#" id="browseBtn" class="link" data-i18n="browse"></a></p>
     <details id="optsBox" class="opts">
       <summary><span data-icon="settings" data-i18n="options"></span><span id="optsSum" class="hint"></span></summary>
-      <div class="optsbody">
+      <div class="optsbody" role="dialog" aria-modal="true">
+        <div class="optshead"><strong data-i18n="options"></strong>
+          <button id="optsClose" type="button" class="small" data-icon="x" data-i18n="close"></button></div>
     <label class="toggle meetmode"><input type="checkbox" id="meetingMode"><span class="knob"></span><span data-i18n="meeting_mode"></span></label>
     <p class="hint meetmodehint" data-i18n="meeting_mode_hint"></p>
     <label class="toggle meetmode"><input type="checkbox" id="learnPeople"><span class="knob"></span><span data-i18n="learn_people"></span></label>

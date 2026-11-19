@@ -942,5 +942,8 @@ call("get_settings")
   };
   box.addEventListener("change", sum);
   setInterval(sum, 1500);  // settings are filled in after start-up and by the folder watch
-  document.addEventListener("click", (e) => { if (box.open && !box.contains(e.target)) box.open = false; });
+  // a popup: the dark backdrop (the details element itself), the close button or Esc closes it
+  box.addEventListener("click", (e) => { if (e.target === box) box.open = false; });
+  $("optsClose").onclick = () => { box.open = false; };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && box.open) box.open = false; });
 })();

@@ -316,3 +316,7 @@ h4.gtitle { font-size:13px; margin-top:14px; }
 #drop .optsbody { margin-top:10px; padding:6px 18px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); }
 #drop .opts > summary .hint { margin:0; }
 #drop .optsbody .watchrow { justify-content:flex-start; text-align:left; }
+#drop .opts[open]::before { content:""; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:60; }
+#drop .opts[open] > .optsbody { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:61; width:min(640px, calc(100vw - 32px));
+  max-height:85vh; overflow:auto; margin:0; padding:16px 22px 20px; box-shadow:0 12px 40px rgba(0,0,0,.3); text-align:left; }
+#drop .optshead { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:16px; }
