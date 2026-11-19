@@ -68,6 +68,63 @@ const SAMPLE_ANALYSIS = {
     return b;
   };
 
+  /* Where an item came from: the time of the cited line, or "source not found" when the line says nothing like it. */
+  const srcChip = (line, ok) => {
+    const seg = segOf(line);
+    if (ok === undefined || ok === null) return linkChip(line); // analysis made before source checks existed
+    if (ok === false || !seg) {
+      const b = el("button", { className: "srcchip missing", textContent: t("source_missing"), title: t("source_missing_title") });
+      if (seg) b.onclick = () => jumpAndPlay(line); else b.disabled = true;
+      return b;
+    }
+    const b = el("button", { className: "srcchip", textContent: fmt(seg.start), title: t("source_title", { t: fmt(seg.start) }) });
+    b.onclick = () => jumpAndPlay(line);
+    return b;
+  };
+
+  /* ---------- chapters ---------- */
+  let chapters = [];
+  const chapterRow = (c, after) => {
+    const b = el("button", { className: "chapter", title: t("chapter_go") },
+      el("span", { className: "ctime", textContent: fmt(c.start || 0) }),
+      el("span", {}, el("div", { className: "ctitle", textContent: c.title || "" }), el("div", { className: "csum", textContent: c.summary || "" })));
+    b.dataset.start = c.start || 0;
+    b.onclick = () => {
+      after?.();
+      const seg = segOf(c.line);
+      if (seg && $("fSpk").value !== "" && +$("fSpk").value !== seg.speaker) { $("fSpk").value = ""; refreshSearch(false); }
+      if (seg) jumpToSeg(c.line);
+      playRange(c.start || 0, null);
+    };
+    return b;
+  };
+  function showChapters(list) {
+    chapters = Array.isArray(list) ? list : [];
+    const box = $("chapters");
+    box.hidden = !chapters.length;
+    if (!chapters.length) return;
+    $("chaptersSum").textContent = t("chapters_n", { n: chapters.length });
+    $("chaptersList").replaceChildren(...chapters.map((c) => chapterRow(c)));
+    markChapter();
+  }
+  function markChapter() {
+    if (!chapters.length) return;
+    const now = $("audio").currentTime;
+    let cur = -1;
+    chapters.forEach((c, i) => { if (now >= (c.start || 0)) cur = i; });
+    [...$("chaptersList").children].forEach((b, i) => b.classList.toggle("current", i === cur && !$("audio").paused));
+  }
+  $("audio").addEventListener("timeupdate", markChapter);
+  $("audio").addEventListener("pause", markChapter);
+  async function loadChapters(id) {
+    showChapters([]);
+    if (!apiHas("get_analysis")) return;
+    try {
+      const st = await call("get_analysis", id);
+      if (job?.id === id && (st.state === "done" || st.state === "stale")) showChapters(st.analysis?.chapters);
+    } catch (e) { /* chapters are optional */ }
+  }
+
   /* ---------- actions ---------- */
   async function start() {
     if (!job || !apiHas("analyze_job")) return;
@@ -96,6 +153,7 @@ const SAMPLE_ANALYSIS = {
     }
     if (tab !== "analysis" || jobId !== id) return; // tab or job changed while waiting
     last = st;
+    if (st.state === "done" || st.state === "stale") showChapters(st.analysis?.chapters);
     render(st);
     if (st.state === "queued" || st.state === "running") pollT = setTimeout(() => { if (tab === "analysis" && jobId === id) load(); }, 1500);
   }
@@ -128,7 +186,7 @@ const SAMPLE_ANALYSIS = {
     const p = Math.max(0, Math.min(1, Number(st.progress) || 0));
     let label;
     if (st.stage === "notes") label = t("an_stage_notes", { i: st.part || 0, n: st.parts || 0 });
-    else if (st.stage === "stats" || st.stage === "names" || st.stage === "merge") label = t("an_stage_" + st.stage);
+    else if (st.stage === "stats" || st.stage === "names" || st.stage === "chapters" || st.stage === "merge") label = t("an_stage_" + st.stage);
     else label = st.state === "queued" ? t("an_stage_queued") : t("an_stage_stats");
     const b = el("button", { className: "small", textContent: t("an_cancel") });
     b.onclick = () => { b.disabled = true; cancel(); };
@@ -189,8 +247,11 @@ const SAMPLE_ANALYSIS = {
 
     if (a.summary) out.push(card(t("an_summary"), el("p", { textContent: a.summary })));
 
-    // topics timeline
-    if (a.topics?.length) {
+    // chapters (clickable) replace the plain topics list when there are some
+    if (a.chapters?.length) {
+      out.push(card(t("chapters"), el("div", { className: "ameta", textContent: t("chapters_hint") }),
+        ...a.chapters.map((c) => chapterRow(c, () => setTab("text")))));
+    } else if (a.topics?.length) {
       const c = card(t("an_topics"));
       for (const tp of a.topics) {
         const time = el("button", { className: "chip", textContent: `${fmt(tp.start || 0)} – ${fmt(tp.end || 0)}`, title: t("play_part") });
@@ -204,7 +265,7 @@ const SAMPLE_ANALYSIS = {
     // decisions
     if (a.decisions?.length) {
       out.push(card(t("an_decisions"), ...a.decisions.map((d) =>
-        el("div", { className: "arow" }, el("span", { className: "atext", textContent: d.text || "" }), linkChip(d.line)))));
+        el("div", { className: "arow" }, el("span", { className: "atext", textContent: d.text || "" }), srcChip(d.line, d.source_ok)))));
     }
 
     // tasks: owner, task, due
@@ -214,7 +275,7 @@ const SAMPLE_ANALYSIS = {
           el("span", { className: "who", textContent: speakerName(tk.owner) }),
           el("span", { className: "atext", textContent: tk.task || "" }),
           el("span", { className: "ameta", textContent: `${t("an_due")}: ${tk.due || "—"}` }),
-          linkChip(tk.line)))));
+          srcChip(tk.line, tk.source_ok)))));
     }
 
     // open questions
@@ -223,7 +284,7 @@ const SAMPLE_ANALYSIS = {
         el("div", { className: "arow" },
           el("span", { className: "who", textContent: speakerName(q.asker) }),
           el("span", { className: "atext", textContent: q.text || "" }),
-          linkChip(q.line)))));
+          srcChip(q.line, q.source_ok)))));
     }
 
     // people
@@ -288,6 +349,7 @@ const SAMPLE_ANALYSIS = {
       jobId = j?.id ?? null;
       last = null;
       pane.replaceChildren();
+      loadChapters(j?.id);
       setTab("text");
     },
   };

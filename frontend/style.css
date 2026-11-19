@@ -206,6 +206,22 @@ footer { position:fixed; bottom:0; left:0; right:0; background:var(--card); bord
 .arow .who { font-weight:600; white-space:nowrap; }
 .arow .atext { flex:1; }
 .arow .ameta { white-space:nowrap; }
+.chapters { margin:6px 0 10px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:6px 12px; }
+.chapters > summary { cursor:pointer; font-weight:600; font-size:14px; padding:2px 0; }
+.chapters[open] > summary { margin-bottom:4px; }
+.chapter { display:grid; grid-template-columns:84px 1fr; gap:10px; align-items:start; width:100%; text-align:left; background:transparent;
+  border:0; border-top:1px solid var(--line); border-radius:0; padding:7px 4px; color:inherit; font:inherit; cursor:pointer; }
+.chapter:first-child { border-top:0; }
+.chapter:hover { background:var(--bg); }
+.chapter.current { background:var(--s0); box-shadow:inset 3px 0 0 var(--accent); }
+.chapter .ctime { font-family:ui-monospace, Consolas, monospace; font-size:13px; color:var(--accent); }
+.chapter .ctitle { font-weight:600; }
+.chapter .csum { font-size:13px; color:var(--muted); margin-top:1px; }
+.srcchip { font-family:ui-monospace, Consolas, monospace; font-size:11px; padding:0 8px; border-radius:10px; border:1px solid var(--line);
+  background:var(--bg); color:var(--accent); cursor:pointer; white-space:nowrap; }
+.srcchip:hover { border-color:var(--accent); }
+.srcchip.missing { font-family:inherit; color:#b45309; border-color:#b45309; }
+@media (prefers-color-scheme: dark) { .srcchip.missing { color:#fbbf24; border-color:#fbbf24; } }
 .alinkchip { font-size:11px; padding:0 8px; border-radius:10px; border:1px solid var(--line); background:var(--bg);
   color:var(--accent); cursor:pointer; white-space:nowrap; font-family:inherit; }
 .alinkchip:hover:not(:disabled) { border-color:var(--accent); }

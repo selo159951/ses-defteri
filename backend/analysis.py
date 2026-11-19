@@ -14,6 +14,7 @@ import threading
 import time
 import traceback
 
+from . import chapters as chapters_mod
 from . import store
 
 CHUNK_TOKENS = 3000
@@ -349,6 +350,30 @@ def _snap(ln, text: str, segments: list[dict], pos: dict[int, int]):
     return best
 
 
+def _source(ln, text: str, segments: list[dict], pos: dict[int, int]):
+    """Where an item (decision, task, question) comes from: (segment id or None, found).
+    - the cited id exists: it is snapped to the nearest line that says it; found is False when not even
+      that line shares a meaningful word (or number) with the item -> shown as "source not found";
+    - the cited id does not exist: the transcript is searched for the line that says it (found when two
+      words, or all of a very short item's words, match), else (None, False).
+    Items are never dropped here: the UI shows the flag instead of hiding them."""
+    w, nums = _words(text), _numbers(text)
+    snapped = _snap(ln, text, segments, pos)
+    if snapped is not None:
+        if not w and not nums:
+            return snapped, True  # nothing to compare
+        seg = _text(segments[pos[snapped]])
+        return snapped, bool(w & _words(seg)) or bool(nums & _numbers(seg))
+    best, best_n = None, 0
+    for sg in segments:
+        n = len(w & _words(_text(sg))) + len(nums & _numbers(_text(sg)))
+        if n > best_n:
+            best, best_n = sg["id"], n
+    if best is not None and best_n >= min(2, len(w) + len(nums)):
+        return best, True
+    return None, False
+
+
 _NUM = re.compile(r"\d+(?:[.,]\d+)+|\d{3,}")
 
 
@@ -460,22 +485,25 @@ def postprocess(raw: dict, segments: list[dict], st: dict, names: dict[str, int]
     for i, t in enumerate(topics):
         t["end"] = topics[i + 1]["start"] if i + 1 < len(topics) else st["duration"]
 
-    decisions = _dedupe([{"text": str(d.get("text", "")).strip(), "line": line(d.get("line"), str(d.get("text", "")))}
+    def src(row, text):  # {"line": id | None, "source_ok": bool}
+        ln, ok = _source(row.get("line"), text, segments, pos)
+        return {"line": ln, "source_ok": ok}
+
+    decisions = _dedupe([{"text": str(d.get("text", "")).strip(), **src(d, str(d.get("text", "")))}
                          for d in rows("decisions")], "text")
-    decisions = [d for d in decisions if d["line"] is not None and keep(d["text"])]
+    decisions = [d for d in decisions if keep(d["text"])]
     one: dict[int, dict] = {}  # two decisions on the same line are the same decision said twice
     for d in decisions:
-        if d["line"] not in one or len(d["text"]) > len(one[d["line"]]["text"]):
+        if d["line"] is not None and (d["line"] not in one or len(d["text"]) > len(one[d["line"]]["text"])):
             one[d["line"]] = d
-    decisions = [d for d in decisions if one[d["line"]] is d]
+    decisions = [d for d in decisions if d["line"] is None or one[d["line"]] is d]
     tasks = _dedupe([{"owner": _to_id(t.get("owner"), names, valid), "task": str(t.get("task", "")).strip(),
-                      "due": str(t.get("due", "") or "").strip(),
-                      "line": line(t.get("line"), str(t.get("task", "")))}
+                      "due": str(t.get("due", "") or "").strip(), **src(t, str(t.get("task", "")))}
                      for t in rows("tasks")], "task")
-    tasks = [t for t in tasks if t["line"] is not None and keep(t["task"])]
+    tasks = [t for t in tasks if keep(t["task"])]
     oq = _dedupe([{"asker": _to_id(q.get("asker"), names, valid), "text": str(q.get("text", "")).strip(),
-                   "line": line(q.get("line"), str(q.get("text", "")))} for q in rows("open_questions")], "text")
-    oq = [q for q in oq if q["line"] is not None and keep(q["text"])]
+                   **src(q, str(q.get("text", "")))} for q in rows("open_questions")], "text")
+    oq = [q for q in oq if keep(q["text"])]
 
     found = {}
     for p in rows("people"):
@@ -590,6 +618,32 @@ def digest(notes: list[dict], open_qs: list[dict] | None = None) -> str:
     return text
 
 
+def _chapters(job_id: str, ana_dir, segments, speakers, lang, call, warnings, check) -> list[dict]:
+    """The chapter stage. Reused from analysis/chapters.json when the transcript is unchanged; a failure
+    costs only the chapters (a warning), never the analysis."""
+    _set(job_id, stage="chapters")
+    lines = render(segments, speakers)
+    h = hashlib.sha1((lang + "\n".join(lines)).encode("utf-8")).hexdigest()
+    f = ana_dir / "chapters.json"
+    try:
+        saved = json.loads(f.read_text("utf-8"))
+        if saved.get("hash") == h and isinstance(saved.get("chapters"), list):
+            return saved["chapters"]
+    except (OSError, ValueError):
+        pass
+    check()
+    try:
+        out = chapters_mod.build(segments, lines, lang, lambda p, sch, max_tokens=900: call(p, sch, max_tokens, system=chapters_mod.SYSTEM[lang]))
+    except Exception as e:
+        if _is_cancel(e):
+            raise
+        traceback.print_exc()
+        warnings.append("the chapters could not be written")
+        return []
+    f.write_text(json.dumps({"hash": h, "chapters": out}, ensure_ascii=False), "utf-8")
+    return out
+
+
 def run(job_id: str, cancel: threading.Event | None = None, generate=None) -> dict:
     """Blocking. Returns the job's analysis state; never raises."""
     t0 = time.time()
@@ -616,9 +670,9 @@ def _run(job_id: str, cancel, generate, t0: float) -> None:
         if cancel is not None and cancel.is_set():
             raise _Cancelled()
 
-    def call(prompt, schema, max_tokens=2048):
+    def call(prompt, schema, max_tokens=2048, system=None):
         check()
-        return generate(prompt, schema=schema, system=SYSTEM[LANG], max_tokens=max_tokens, cancel=cancel)
+        return generate(prompt, schema=schema, system=system or SYSTEM[LANG], max_tokens=max_tokens, cancel=cancel)
 
     try:  # the speech model sits on the card after a transcription; the analysis model needs that room
         from . import asr
@@ -665,7 +719,7 @@ def _run(job_id: str, cancel, generate, t0: float) -> None:
 
     st = stats(segments, speakers)
     chunks = chunk_lines(render(segments, speakers))
-    total = len(chunks) + 2  # notes parts (+ decision pass) + question check + final call
+    total = len(chunks) + 3  # notes parts (+ decision pass) + chapters + question check + final call
     _set(job_id, stage="notes", parts=len(chunks), progress=0.0)
 
     notes = []
@@ -711,7 +765,8 @@ def _run(job_id: str, cancel, generate, t0: float) -> None:
 
     if not any(notes):
         raise RuntimeError("the model could not analyse the recording: " + last_error)
-    _set(job_id, stage="merge")
+    chapter_list = _chapters(job_id, ana_dir, segments, speakers, LANG, call, warnings, check)
+    _set(job_id, stage="merge", progress=round((len(chunks) + 1) / total, 3))
     found = collect(notes)
     for dd in extra_decisions:
         found["decisions"] = merge_decisions(found["decisions"], dd)
@@ -721,7 +776,7 @@ def _run(job_id: str, cancel, generate, t0: float) -> None:
         if _is_cancel(e):
             raise
         traceback.print_exc()  # keep the unchecked list
-    _set(job_id, progress=round((len(chunks) + 1) / total, 3))
+    _set(job_id, progress=round((len(chunks) + 2) / total, 3))
     shown = ", ".join(sp["name"] for sp in st["speakers"])
     merge_stats = {"duration": st["duration"], "balance": st["balance"],
                    "speakers": [{k: sp[k] for k in ("name", "share", "turns", "words", "questions")}
@@ -759,7 +814,7 @@ def _run(job_id: str, cancel, generate, t0: float) -> None:
         pass
     result = {"version": VERSION, "model": model, "device": device, "lang": LANG, "created": time.time(),
               "seconds": round(time.time() - t0, 1), "transcript_hash": transcript_hash(segments),
-              "stats": st, **result, "short": short, "warnings": warnings, "name_suggestions": suggestions}
+              "stats": st, **result, "chapters": chapter_list, "short": short, "warnings": warnings, "name_suggestions": suggestions}
     (store.job_path(job_id) / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), "utf-8")
     _set(job_id, state="done", stage="merge", progress=1.0, error="")
 
