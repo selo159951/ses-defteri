@@ -7,6 +7,7 @@ BASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
 FILES = [
     (BASE + "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", True),
     (BASE + "speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx", False),
+    (BASE + "speech-enhancement-models/gtcrn_simple.onnx", False),  # noise cleanup, 0.5 MB
 ]
 dest = Path(__file__).parent / "models"
 dest.mkdir(exist_ok=True)

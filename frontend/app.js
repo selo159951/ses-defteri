@@ -849,6 +849,7 @@ window.addEventListener("beforeunload", () => save());
 /* Meeting mode: transcription also starts the analysis in the background. */
 $("meetingMode").onchange = (e) => call("set_settings", { meeting_mode: e.target.checked }).catch(() => {});
 $("learnPeople").onchange = (e) => call("set_settings", { learn_people: e.target.checked }).catch(() => {});
+$("denoiseMode").onchange = (e) => call("set_settings", { denoise: e.target.value }).catch(() => {});
 $("langMode").onchange = (e) => call("set_settings", { language: e.target.value }).catch(() => {});
 
 window.splash?.step(70, "settings");
@@ -859,6 +860,7 @@ call("get_settings")
     $("learnPeople").checked = st.learn_people !== false;
     $("langMode").value = st.language || "auto";
     refreshWatch();
+    $("denoiseMode").value = st.denoise || "off";
     setLang(st.ui_lang || (navigator.language.startsWith("tr") ? "tr" : "en"), false);
   })
   .catch(() => setLang("tr", false))
