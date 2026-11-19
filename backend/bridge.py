@@ -11,7 +11,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import asr, export, store
+from . import asr, denoise, export, store
 from . import pipeline
 from .pipeline import run_job
 from .llm_api import LlmApi
@@ -197,6 +197,7 @@ class Api(SystemApi, LlmApi):
     def get_settings(self) -> dict:
         return {**asr.status(), "meeting_mode": bool(asr.get_settings().get("meeting_mode", False)), "language": asr.language_mode(),
                 "learn_people": bool(asr.get_settings().get("learn_people", True)),
+                "denoise": denoise.normalize_mode(asr.get_settings().get("denoise")),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
                 "tour_job_done": bool(asr.get_settings().get("tour_job_done", False))}
 
@@ -209,6 +210,8 @@ class Api(SystemApi, LlmApi):
             asr.set_setting("meeting_mode", bool(values["meeting_mode"]))
         if "learn_people" in values:
             asr.set_setting("learn_people", bool(values["learn_people"]))
+        if values.get("denoise") in denoise.MODES:
+            asr.set_setting("denoise", values["denoise"])
         for key in ("tour_home_done", "tour_job_done"):
             if key in values:
                 asr.set_setting(key, bool(values[key]))

@@ -279,6 +279,7 @@ def test_meeting_mode_setting_and_hook(monkeypatch):
     monkeypatch.setattr("backend.diarize.refine_by_sentence", lambda s, w, spk, cb, margins=None: spk)
     monkeypatch.setattr("backend.people.apply_to_job", lambda *a, **k: {})
     monkeypatch.setattr(asr, "transcribe", lambda *a, **k: ([], "tr"))
+    monkeypatch.setattr(asr, "detect_languages", lambda s: [])  # never load or download a real model in a test
     jid = make_job([])
     jp = store.job_path(jid)
     st = {"stage": "", "progress": 0.0, "dprogress": 0.0}

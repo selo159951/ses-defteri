@@ -148,6 +148,7 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
     _check_stop(job_id)
 
     parts = job.get("parts") if resume and job.get("parts") else chunking.split(samples)
+    asr_samples = _clean_noise(job_id, jp, job, samples, parts, resume, status, push)
     status["stage"] = "loading_model"
     push(duration=duration, parts=parts)
     asr.load_model()
@@ -182,9 +183,52 @@ def _run(job_id: str, src: Path | None, resume: bool, t_start: float) -> None:
         th.start()
     try:
         return _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
-                                      th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded)
+                                      th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded, asr_samples)
     finally:
         cancel.set()  # no-op when finished; stops a still running separation after an error or a stop
+
+
+def _clean_noise(job_id, jp, job, samples, parts, resume, status, push):
+    """Noise cleanup for the transcription (Settings: Off / Auto / Always). Returns the samples the speech
+    model should hear: a cleaned copy of the recording, or `samples` itself when nothing is done.
+    The playback mp3 is written before this and always keeps the original. Never fails a job."""
+    from . import asr, denoise
+
+    mode = denoise.normalize_mode(asr.get_settings().get("denoise", denoise.DEFAULT_MODE))
+    try:
+        if resume and "noise" in job:  # same decision as the first run
+            clean, snr = bool(job["noise"].get("cleaned")), job["noise"].get("snr")
+        else:
+            clean, snr = denoise.should_denoise(mode, samples)
+            clean = clean and denoise.available()
+        if resume and parts and all((jp / "parts" / f"{i}.json").exists() for i in range(len(parts))):
+            clean = False  # every part is already transcribed: nothing left to hear
+        if snr is not None and snr == snr:  # not NaN (Off mode does not measure)
+            snr = round(float(snr), 1)
+        else:
+            snr = None
+        store.update_job(job_id, noise={"mode": mode, "snr": snr, "cleaned": clean})
+        if not clean:
+            return samples
+        status["stage"] = "cleaning"
+        push()
+        t0 = time.time()
+        last = [0.0]
+
+        def prog(p):
+            _check_stop(job_id)
+            if p - last[0] >= 0.05:
+                last[0] = p
+                push(clean_progress=round(p, 2))
+
+        out = denoise.denoise(samples, prog)
+        store.update_job(job_id, noise={"mode": mode, "snr": snr, "cleaned": True, "secs": round(time.time() - t0, 1)})
+        return out
+    except JobStopped:
+        raise
+    except Exception:  # a broken cleaner must never lose the recording: use the original audio
+        traceback.print_exc()
+        return samples
 
 
 def _parallel_enabled() -> bool:
@@ -194,8 +238,11 @@ def _parallel_enabled() -> bool:
 
 
 def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, parallel,
-                           th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded):
+                           th, diar, run_diar, dprog, push, status, resume, t_start, t_decoded, asr_samples=None):
     from . import asr, diarize
+
+    if asr_samples is None:  # speech model hears the recording itself unless a cleaned copy is passed
+        asr_samples = samples
 
     status["stage"] = "transcribing"
     push(device=device)
@@ -206,7 +253,7 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     last_t = [0.0]
     t_asr = time.time()
     if not (resume and (part_dir / "0.json").exists()) or True:
-        asr.detect_languages(samples)  # which language(s) the whole recording is in (one cheap pass)
+        asr.detect_languages(asr_samples)  # which language(s) the whole recording is in (one cheap pass)
     for i, (a, b) in enumerate(parts):
         _check_stop(job_id)  # between parts
         f = part_dir / f"{i}.json"
@@ -220,7 +267,7 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
                     last_t[0] = status["progress"]
                     push(part=i + 1)
 
-            ws, lang = asr.transcribe(samples[int(a * SR):int(b * SR)], b - a, tprog)
+            ws, lang = asr.transcribe(asr_samples[int(a * SR):int(b * SR)], b - a, tprog)
             saved = {"lang": lang, "words": [[round(w.start + a, 3), round(w.end + a, 3), w.text, round(w.prob, 3)] for w in ws]}
             f.write_text(json.dumps(saved, ensure_ascii=False), "utf-8")
         words += [Word(w[0], w[1], w[2], w[3] if len(w) > 3 else 1.0) for w in saved["words"]]
