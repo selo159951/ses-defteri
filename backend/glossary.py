@@ -132,6 +132,39 @@ def _split(text: str) -> tuple[str, str, str, str]:
     return lead, m.group(1), m.group(2), m.group(3)
 
 
+def _tr_lower(s: str) -> str:
+    return s.replace("I", "ı").replace("İ", "i").lower()
+
+
+# Turkish case endings that may follow a name ("Ahmet'in", "Ahmet'e", "Ahmet'ten" ...); no plurals, no derivations
+_SUFFIXES = ("in", "ın", "un", "ün", "nin", "nın", "nun", "nün", "e", "a", "ye", "ya", "i", "ı", "u", "ü",
+             "yi", "yı", "yu", "yü", "ni", "nı", "nu", "nü", "de", "da", "te", "ta", "den", "dan", "ten", "tan",
+             "le", "la", "yle", "yla")
+_SUFFIX_RE = re.compile(r"^(['’]?)(" + "|".join(sorted(_SUFFIXES, key=len, reverse=True)) + r")$")
+
+
+def _is_proper(term: str) -> bool:
+    """A one-word entry that starts with a capital letter is a name; "toplantı" is an ordinary word."""
+    return " " not in term and term[:1].isupper() and len(fold(term)) >= 4
+
+
+def _name_suffix(core: str, names: list[str]) -> str | None:
+    """"ahmetin" / "Ahmetin" / "ahmet'in" -> "Ahmet'in" for the glossary name "Ahmet". Only the name's own letters
+    (Turkish letters and case may differ) followed by a known case ending; anything else (other spelling,
+    longer words, all capitals) is left alone."""
+    for name in names:
+        n = len(name)
+        head, tail = core[:n], core[n:]
+        if not tail or fold(head) != fold(name) or len(head) != n:
+            continue
+        if head.isupper() and n > 1:
+            continue  # "AHMETİN" / acronym style: not touched
+        m = _SUFFIX_RE.match(tail)
+        if m:
+            return name + (m.group(1) or "'") + m.group(2)
+    return None
+
+
 def _sim(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, a, b).ratio()
 
@@ -147,6 +180,7 @@ def apply(words: list) -> tuple[list, list[dict]]:
     if not fixes and not terms:
         return words, []
     folded_terms = [(fold(t), t) for t in terms]
+    names = sorted((t for t in terms if _is_proper(t)), key=len, reverse=True)
     out: list[Word] = []
     changes: list[dict] = []
     i = 0
@@ -171,11 +205,19 @@ def apply(words: list) -> tuple[list, list[dict]]:
             if fx and (size == 1 or len(f) >= 6) and (fx.get("manual") or fx.get("count", 1) >= 2 or min(w.prob for w in chunk) < 0.75):
                 right, why = fx["right"], "fix"
             else:
+                same = False
                 for ft, term in folded_terms:
                     if f == ft:
+                        if not _is_proper(term) and _tr_lower(core) == _tr_lower(term):
+                            same = True  # an ordinary word that differs only in capitals is not touched
+                            break
                         right, why = term, "spelling"
                         break
-                if right is None and len(f) >= 5 and all(w.prob < FUZZY_MAX_PROB for w in chunk):  # every word of it must be one the model doubted
+                if right is None and not same and size == 1 and names:
+                    right = _name_suffix(core, names)
+                    if right:
+                        why = "name"
+                if right is None and not same and len(f) >= 5 and all(w.prob < FUZZY_MAX_PROB for w in chunk):  # every word of it must be one the model doubted
                     best = max(((_sim(f, ft), term) for ft, term in folded_terms
                                 if ft[:1] == f[:1] and abs(len(f) - len(ft)) <= max(2, len(ft) // 4)), default=(0.0, None))
                     if best[0] >= FUZZY:

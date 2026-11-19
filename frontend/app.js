@@ -355,6 +355,11 @@ function renderSpeakers() {
       del.onclick = async () => { await checkpoint(); delete spkNames[i]; commit(t("speaker_removed")); };
       menu.append(del);
     }
+    if (mine.length) {
+      const only = el("button", { className: "small" }, icText("file-text", t("only_export")));
+      only.onclick = () => { more.open = false; exportOnly(i); };
+      menu.append(only);
+    }
     window.peopleHooks?.speakerMenu(i, menu); // people.js: "Save to People"
     const more = el("details", { className: "menu spkmore" }, el("summary", { textContent: "⋯", title: t("speaker_menu") }), menu);
     const stats = el("span", { className: "stats", textContent: mine.length ? `${mmss(talk)} · ${Math.round((talk / total) * 100)}% · ${plural(mine.length, "line_1", "lines_n")}` : t("no_lines") });
@@ -372,6 +377,7 @@ function renderSpeakers() {
   const det = el("button", { className: "icon", title: t("detect_names") + " - " + t("detect_title") }, ic("user-search"));
   det.onclick = detectNames;
   box.append(el("div", { className: "spkbtns" }, add, det));
+  renderExportWho();
   const learned = (job.learned || []).filter((x) => x.action === "created" || x.action === "enriched");
   if (learned.length) {
     const names = learned.map((x) => x.name);
@@ -714,20 +720,47 @@ function updateExportOptions() {
   $("expAnalysisHint").hidden = ready;
   if (!ready && $("expVersion").value === "analysis") $("expVersion").value = "edited";
   const isAnalysis = $("expVersion").value === "analysis";
+  $("expWho").hidden = isAnalysis;
   const srt = $("expFmt").querySelector('option[value="srt"]');
   srt.disabled = isAnalysis;
   if (isAnalysis && $("expFmt").value === "srt") $("expFmt").value = "docx";
 }
 $("expVersion").onchange = updateExportOptions;
-$("expGo").onclick = async () => {
-  await save();
-  const v = $("expVersion").value, f = $("expFmt").value;
-  $("expGo").closest("details").open = false;
-  const r = await call("save_export", job.id, v, f, LANG); // native "Save as" dialog
+
+/* "Only one person's words": tick speakers in the export menu (nobody ticked = everyone). */
+function renderExportWho() {
+  const box = $("expWhoList"), keep = new Set(selectedWho());
+  box.replaceChildren();
+  for (const i of spkIds()) {
+    if (!job.segments.some((s) => s.speaker === i)) continue;
+    const cb = el("input", { type: "checkbox", value: i, checked: keep.has(i) });
+    box.append(el("label", { className: "chk " + spkClass(i) }, cb, el("span", { textContent: spkLabel(i) })));
+  }
+}
+const selectedWho = () => [...$("expWhoList").querySelectorAll("input:checked")].map((c) => +c.value);
+function exportOnly(i) {
+  renderExportWho();
+  for (const c of $("expWhoList").querySelectorAll("input")) c.checked = +c.value === i;
+  $("expVersion").value = "edited"; updateExportOptions();
+  setTimeout(() => ($("expMenu").open = true), 0); // after the page-wide "click outside closes menus" handler
+  toast(t("only_export_set", { s: spkLabel(i) }));
+}
+function reportSaved(r) {
   if (r.cancelled) return;
   if (r.error) return toast(t("export_failed") + r.error);
   const msg = r.paths.length === 1 ? t("saved_file", { p: r.paths[0] }) : t("saved_files", { n: r.paths.length, p: r.paths[0].replace(/[\\/][^\\/]+$/, "") });
   toast(msg, false, { label: t("show_folder"), run: () => call("reveal", r.paths[0]) });
+}
+$("expGo").onclick = async () => {
+  await save();
+  const v = $("expVersion").value, f = $("expFmt").value;
+  const who = v === "analysis" ? [] : selectedWho();
+  $("expGo").closest("details").open = false;
+  reportSaved(await call("save_export", job.id, v, f, LANG, who)); // native "Save as" dialog
+};
+$("wordBtn").onclick = async () => { // one click: edited transcript as .docx, only the Save dialog in between
+  await save();
+  try { reportSaved(await call("save_word", job.id, LANG)); } catch (e) { toast(t("export_failed") + (e?.message || e)); }
 };
 
 /* ================= GPU status (chip + System page live in system.js) ================= */
@@ -741,10 +774,39 @@ function renderCredits() {
   const link = el("a", { href: "https://selimoguz.com.tr", className: "ext", textContent: "Selim Oğuz" });
   $("creditsLine").replaceChildren(`${t("idea")}: Umut Akbaş  ·  ${t("developer")}: `, link, ` ${t("and")} Claude`);
 }
+/* ================= folder watch (off by default) ================= */
+let watchSt = null, watchAdded = 0;
+function renderWatch() {
+  const st = watchSt; if (!st) return;
+  $("watchOn").checked = st.enabled;
+  $("watchDir").textContent = st.dir || t("watch_none");
+  const ind = $("watchInd");
+  ind.hidden = !st.enabled;
+  if (!st.enabled) return;
+  ind.classList.toggle("warn", st.note === "missing");
+  const parts = [t("watch_active", { d: st.dir })];
+  if (st.note === "missing") parts.push(t("watch_missing"));
+  if (st.waiting) parts.push(t("watch_waiting", { n: st.waiting }));
+  if (st.queued) parts.push(t("watch_added", { n: st.queued, f: st.last_file }));
+  $("watchIndText").textContent = parts.join(" · ");
+}
+async function refreshWatch() {
+  try { const st = await call("get_watch"); if (watchSt && st.queued !== watchSt.queued && !$("home").hidden) loadJobs(); watchSt = st; renderWatch(); } catch {}
+}
+$("watchPick").onclick = async () => {
+  try { watchSt = await call("pick_watch_folder"); renderWatch(); } catch (e) { toast(t("watch_failed") + (e?.message || e)); }
+};
+$("watchOn").onchange = async (e) => {
+  try { watchSt = await call("set_watch", e.target.checked); }
+  catch (err) { e.target.checked = false; toast(t("watch_pick_first")); return; }
+  renderWatch();
+};
+setInterval(refreshWatch, 3000);
+
 function setLang(l, persist = true) {
   LANG = I18N[l] ? l : "en";
   $("langSel").value = LANG;
-  applyI18n(); renderCredits();
+  applyI18n(); renderCredits(); renderWatch();
   if (gpuState) showGpu(gpuState);
   if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
@@ -794,6 +856,7 @@ call("get_settings")
     $("meetingMode").checked = !!st.meeting_mode;
     $("learnPeople").checked = st.learn_people !== false;
     $("langMode").value = st.language || "auto";
+    refreshWatch();
     setLang(st.ui_lang || (navigator.language.startsWith("tr") ? "tr" : "en"), false);
   })
   .catch(() => setLang("tr", false))

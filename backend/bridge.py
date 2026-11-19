@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import asr, export, store
 from . import pipeline
+from .watcher import Watcher
 from .pipeline import run_job
 from .llm_api import LlmApi
 from .system_api import SystemApi
@@ -27,6 +28,12 @@ EXPORT_TYPES = {
 MEDIA_EXT = "*.mp3;*.wav;*.m4a;*.mp4;*.ogg;*.opus;*.flac;*.aac;*.webm;*.mkv;*.mov;*.wma;*.amr;*.3gp"
 MEDIA_SUFFIXES = {"." + e.split(".")[-1] for e in MEDIA_EXT.split(";")}
 MEDIA_TYPES = (f"Audio and video ({MEDIA_EXT})", "All files (*.*)")
+
+
+def _safe_name(s: str, limit: int = 80) -> str:
+    """Text that is safe inside a Windows file name."""
+    s = "".join("_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in s).strip(" .")
+    return (s[:limit].strip(" .")) or "kayit"
 
 
 class SkipFile(ValueError):
@@ -62,6 +69,9 @@ class Api(SystemApi, LlmApi):
 
     def __init__(self, window_getter=None):
         self._get_window = window_getter
+        self._watcher = Watcher(self.start_jobs)
+        if self._watcher.config()["enabled"]:
+            self._watcher.start()
 
     def _window(self):
         if self._get_window:
@@ -243,7 +253,43 @@ class Api(SystemApi, LlmApi):
     def _remember_dir(self, key: str, d: str) -> None:
         asr.set_setting(key, d)
 
-    def save_export(self, job_id: str, version: str, fmt: str, lang: str = "en") -> dict:
+    def save_word(self, job_id: str, lang: str = "en") -> dict:
+        """One click: the edited transcript as .docx. The Save dialog is pre-filled with the recording's name
+        in the folder used last. Returns {"paths": [...]} or {"cancelled": True}."""
+        import webview
+
+        data = _job(job_id)
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(),
+            save_filename=f"{_safe_name(Path(data['filename']).stem)}.docx", file_types=(EXPORT_TYPES["docx"],)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".docx":
+            target = target.with_name(target.name + ".docx")
+        _write(target, export.render(data, "edited", "docx", lang))
+        self._remember_dir("export_dir", str(target.parent))
+        return {"paths": [str(target)]}
+
+    # ---------------- folder watch ----------------
+    def get_watch(self) -> dict:
+        return self._watcher.status()
+
+    def pick_watch_folder(self) -> dict:
+        import webview
+
+        folder = _first(self._window().create_file_dialog(
+            webview.FileDialog.FOLDER, directory=self._last_dir("watch_dir")))
+        if folder:
+            self._remember_dir("watch_dir", folder)
+            self._watcher.set_dir(folder)
+        return self._watcher.status()
+
+    def set_watch(self, enabled: bool) -> dict:
+        self._watcher.set_enabled(bool(enabled))
+        return self._watcher.status()
+
+    def save_export(self, job_id: str, version: str, fmt: str, lang: str = "en", speakers: list | None = None) -> dict:
         """Ask where to save, write the file(s). Returns {"paths": [...]} or {"cancelled": True}."""
         import json
 
@@ -252,8 +298,11 @@ class Api(SystemApi, LlmApi):
         if fmt not in EXPORT_TYPES or version not in ("original", "edited", "both", "analysis"):
             return {"error": "bad format"}
         data = _job(job_id)
-        stem = Path(data["filename"]).stem
+        stem = _safe_name(Path(data["filename"]).stem)
         win = self._window()
+        speakers = sorted({int(x) for x in speakers or []})
+        if speakers and version != "analysis":  # only these people's lines: their names go into the file name
+            stem += " - " + _safe_name(", ".join(export.speaker_names(data, speakers, lang)))
 
         if version == "analysis":  # a meeting analysis has no subtitles
             if fmt not in ("md", "txt", "docx", "json"):
@@ -295,7 +344,7 @@ class Api(SystemApi, LlmApi):
                 return {"cancelled": True}
             targets = [Path(folder) / f"{stem}.{v}.{fmt}" for v in versions]
         for v, t in zip(versions, targets):
-            _write(t, export.render(data, v, fmt, lang))
+            _write(t, export.render(data, v, fmt, lang, speakers))
         self._remember_dir("export_dir", str(targets[0].parent))
         return {"paths": [str(t) for t in targets]}
 

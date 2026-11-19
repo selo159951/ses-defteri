@@ -161,6 +161,12 @@ footer { position:fixed; bottom:0; left:0; right:0; background:var(--card); bord
 /* ===== meeting mode toggle (home) ===== */
 #drop .meetmode { margin-top:18px; font-size:13px; }
 #drop .meetmodehint { margin:4px 0 0; }
+.watchrow { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px; flex-wrap:wrap; } .watchrow .hint { margin:0; }
+.watchind { margin:12px 0 0; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); font-size:13px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+.watchind.warn { border-color:var(--hitcur); color:var(--fg); }
+.wordbtn { font-size:15px; font-weight:600; padding:8px 18px; display:inline-flex; align-items:center; gap:8px; }
+#expWho { display:flex; flex-direction:column; gap:4px; } #expWhoList { display:flex; flex-direction:column; gap:2px; max-height:160px; overflow:auto; }
+#expWhoList label.chk { flex-direction:row; align-items:center; gap:6px; }
 
 /* ===== tabs in the transcript view ===== */
 #jobTabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin:10px 0 8px; }

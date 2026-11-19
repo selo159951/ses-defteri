@@ -310,3 +310,64 @@ def test_bridge_round_trip():
     assert api.get_glossary() == g
     g = api.remove_glossary_fix("koriersu")
     assert g["fixes"] == [] and g["terms"] == ["Koray Ersu", "İvedik"]
+
+
+# ---------------------------------------------------------------- simple name fix (capitals + Turkish endings)
+def _fix(words, terms=("Ahmet",)):
+    glossary.set_terms(list(terms))
+    out, _ = glossary.apply([W(w) for w in words])
+    return texts(out)
+
+
+@pytest.mark.parametrize("src,dst", [
+    ("ahmet", "Ahmet"), ("AHMET", "Ahmet"),
+    ("ahmetin", "Ahmet'in"), ("Ahmetin", "Ahmet'in"), ("ahmet'in", "Ahmet'in"), ("ahmet’in", "Ahmet’in"),
+    ("ahmete", "Ahmet'e"), ("Ahmet'e", "Ahmet'e"), ("ahmeti", "Ahmet'i"), ("ahmetle", "Ahmet'le"),
+    ("ahmetten", "Ahmet'ten"), ("ahmette", "Ahmet'te"), ("ahmetten,", "Ahmet'ten,"), ("(ahmetin)", "(Ahmet'in)"),
+])
+def test_name_fix_positive(src, dst):
+    assert _fix([src]) == [dst]
+
+
+@pytest.mark.parametrize("word", [
+    "Ahmed", "ahmed", "Ahmetçe", "Ahmetler", "Ahmetgil", "Mahmet", "Ahmetimiz", "AHMETİN", "Ahmet's", "ahmetz",
+    "ahme", "ahmetinki", "Ahmet'lerin",
+])
+def test_name_fix_negative(word):
+    assert _fix([word]) == [word]
+
+
+def test_name_fix_sentence_and_english_untouched():
+    out = _fix(["ahmetin", "kitabı", "the", "Ahmed", "is", "here", "ahmet'e", "verdim"])
+    assert out == ["Ahmet'in", "kitabı", "the", "Ahmed", "is", "here", "Ahmet'e", "verdim"]
+
+
+def test_name_fix_turkish_letters():
+    assert _fix(["şükrünün"], ("Şükrü",)) == ["Şükrü'nün"]
+    assert _fix(["sukrunun"], ("Şükrü",)) == ["Şükrü'nun"]  # the ending is kept as heard
+
+
+def test_name_fix_lowercase_entry_is_not_a_name():
+    assert _fix(["Toplantıda", "toplantı", "toplantıya"], ("toplantı",)) == ["Toplantıda", "toplantı", "toplantıya"]
+    assert _fix(["Toplantı"], ("toplantı",)) == ["Toplantı"]
+
+
+def test_name_fix_multiword_entry_has_no_suffix_rule():
+    assert _fix(["koray", "ersu'nun"], ("Koray Ersu",)) == ["koray", "ersu'nun"]
+
+
+def test_name_fix_short_names_not_touched():
+    assert _fix(["alinin", "ali"], ("Ali",)) == ["alinin", "ali"]
+
+
+def test_name_fix_keeps_timing_and_reports_change():
+    glossary.set_terms(["Ahmet"])
+    out, ch = glossary.apply([W("ahmetin", start=1.0, end=1.6, prob=0.3)])
+    assert (out[0].start, out[0].end, out[0].prob) == (1.0, 1.6, 1.0)
+    assert ch == [{"from": "ahmetin", "to": "Ahmet'in", "why": "name"}]
+
+
+def test_name_fix_already_right_makes_no_change_entry():
+    glossary.set_terms(["Ahmet"])
+    _, ch = glossary.apply([W("Ahmet'in")])
+    assert ch == []

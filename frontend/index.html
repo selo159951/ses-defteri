@@ -33,10 +33,17 @@
     <p class="hint meetmodehint" data-i18n="meeting_mode_hint"></p>
     <label class="toggle meetmode"><input type="checkbox" id="learnPeople"><span class="knob"></span><span data-i18n="learn_people"></span></label>
     <p class="hint meetmodehint" data-i18n="learn_people_hint"></p>
+    <div id="watchBox">
+      <label class="toggle meetmode"><input type="checkbox" id="watchOn"><span class="knob"></span><span data-i18n="watch_on"></span></label>
+      <p class="hint meetmodehint" data-i18n="watch_hint"></p>
+      <div class="watchrow"><button id="watchPick" type="button" class="small" data-icon="folder" data-i18n="watch_choose"></button>
+        <span id="watchDir" class="hint"></span></div>
+    </div>
     <label class="langmode"><span data-i18n="rec_language"></span>
       <select id="langMode"><option value="auto" data-i18n="rl_auto"></option><option value="mixed" data-i18n="rl_mixed"></option>
         <option value="tr" data-i18n="rl_tr"></option><option value="en" data-i18n="rl_en"></option></select></label>
   </div>
+  <div id="watchInd" class="watchind" hidden><span data-icon="eye"></span><span id="watchIndText"></span></div>
   <div id="pnote" role="alert" hidden></div>
   <section id="progress" hidden>
     <div id="pname"></div>
@@ -79,12 +86,15 @@
     <span class="spacer"></span>
     <button id="undoBtn" class="icon" disabled data-icon="undo" data-i18n-title="undo_title"></button>
     <button id="helpBtn" class="icon" data-icon="keyboard" data-i18n-title="shortcuts_title"></button>
-    <details class="menu"><summary data-i18n="export"></summary>
+    <button id="wordBtn" class="primary wordbtn" data-icon="file-text" data-i18n="save_word" data-i18n-title="save_word_title"></button>
+    <details class="menu" id="expMenu"><summary data-i18n="export"></summary>
       <div>
         <label><span data-i18n="version"></span>
           <select id="expVersion"><option value="edited" data-i18n="edited"></option><option value="original" data-i18n="original"></option><option value="both" data-i18n="both"></option><option value="analysis" data-i18n="export_analysis"></option></select></label>
         <label><span data-i18n="format"></span>
           <select id="expFmt"><option value="docx">Word (.docx)</option><option value="txt">TXT</option><option value="md">Markdown</option><option value="srt" data-i18n="srt"></option><option value="json">JSON</option></select></label>
+        <div id="expWho"><div class="menulabel" data-i18n="only_who"></div><div id="expWhoList"></div>
+          <div class="hint" data-i18n="only_who_hint"></div></div>
         <div id="expAnalysisHint" class="hint" data-i18n="export_analysis_hint" hidden></div>
         <button id="expGo" data-i18n="save_as"></button>
       </div>
