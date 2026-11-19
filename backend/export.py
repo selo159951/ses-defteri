@@ -46,7 +46,7 @@ ANALYSIS_LABELS = {
         "disclaimer": "AI-generated, may contain mistakes",
         "score": "Meeting score", "overall": "Overall", "comment": "Comment", "tips": "Tips",
         "sub_decisions": "Decisions", "sub_tasks": "Task clarity", "sub_questions": "Questions answered", "sub_repetition": "Repetition",
-        "sub_balance": "Balance", "summary": "Summary", "topics": "Topics", "decisions": "Decisions",
+        "sub_balance": "Balance", "summary": "Summary", "topics": "Topics", "chapters": "Chapters", "source_missing": "source not found", "decisions": "Decisions",
         "tasks": "Tasks", "open_questions": "Open questions", "people": "People",
         "owner": "Owner", "due": "Due", "asker": "Asked by",
         "share": "talk time", "turns": "turns", "words": "words", "questions": "questions",
@@ -56,7 +56,7 @@ ANALYSIS_LABELS = {
         "disclaimer": "Yapay zekâ yorumudur, hata içerebilir",
         "score": "Toplantı puanı", "overall": "Genel", "comment": "Yorum", "tips": "İpuçları",
         "sub_decisions": "Kararlar", "sub_tasks": "Görev netliği", "sub_questions": "Cevaplanan sorular", "sub_repetition": "Tekrar",
-        "sub_balance": "Denge", "summary": "Özet", "topics": "Konular", "decisions": "Kararlar",
+        "sub_balance": "Denge", "summary": "Özet", "topics": "Konular", "chapters": "Bölümler", "source_missing": "kaynak bulunamadı", "decisions": "Kararlar",
         "tasks": "Görevler", "open_questions": "Açık sorular", "people": "Kişiler",
         "owner": "Sorumlu", "due": "Vade", "asker": "Soruyu soran",
         "share": "konuşma payı", "turns": "sıra", "words": "kelime", "questions": "soru",
@@ -76,6 +76,13 @@ def _line_stamp(job: dict, line, lang: str = "en") -> str:
         return ""
     seg = next((s for s in job.get("segments") or [] if s.get("id") == line), None)
     return f" [{ts(seg['start'])}]" if seg else ""
+
+
+def _source_stamp(job: dict, item: dict, lang: str = "en") -> str:
+    """The time of the cited line, or a note when the source could not be found."""
+    if item.get("source_ok") is False:
+        return f" [{ANALYSIS_LABELS[lang]['source_missing']}]"
+    return _line_stamp(job, item.get("line"), lang)
 
 
 def _pct(share: float, lang: str) -> str:
@@ -107,7 +114,16 @@ def _analysis_blocks(job: dict, analysis: dict, lang: str) -> list[tuple[str, st
     if analysis.get("summary"):
         blocks += [("h2", L["summary"]), ("p", analysis["summary"])]
 
-    topics = analysis.get("topics") or []
+    chapters = analysis.get("chapters") or []
+    if chapters:
+        blocks.append(("h2", L["chapters"]))
+        for c in chapters:
+            rng = f"[{ts(c['start'])} – {ts(c['end'])}] " if c.get("start") is not None and c.get("end") is not None else ""
+            blocks.append(("bullet", f"{rng}{c.get('title', '')}"))
+            if c.get("summary"):
+                blocks.append(("sub", c["summary"]))
+
+    topics = [] if chapters else analysis.get("topics") or []  # chapters replace the plain topic list
     if topics:
         blocks.append(("h2", L["topics"]))
         for t in topics:
@@ -121,7 +137,7 @@ def _analysis_blocks(job: dict, analysis: dict, lang: str) -> list[tuple[str, st
     decisions = analysis.get("decisions") or []
     if decisions:
         blocks.append(("h2", L["decisions"]))
-        blocks += [("bullet", f"{d.get('text', '')}{_line_stamp(job, d.get('line'), lang)}")
+        blocks += [("bullet", f"{d.get('text', '')}{_source_stamp(job, d, lang)}")
                    for d in decisions]
 
     tasks = analysis.get("tasks") or []
@@ -131,14 +147,14 @@ def _analysis_blocks(job: dict, analysis: dict, lang: str) -> list[tuple[str, st
             line = f"{_spk(job, t.get('owner'), lang)}: {t.get('task', '')}"
             if t.get("due"):
                 line += f" ({L['due']}: {t['due']})"
-            blocks.append(("bullet", line + _line_stamp(job, t.get("line"), lang)))
+            blocks.append(("bullet", line + _source_stamp(job, t, lang)))
 
     questions = analysis.get("open_questions") or []
     if questions:
         blocks.append(("h2", L["open_questions"]))
         for q in questions:
             blocks.append(("bullet", f"{_spk(job, q.get('asker'), lang)}: {q.get('text', '')}"
-                                      f"{_line_stamp(job, q.get('line'), lang)}"))
+                                      f"{_source_stamp(job, q, lang)}"))
 
     speakers = (analysis.get("stats") or {}).get("speakers") or []
     if speakers:

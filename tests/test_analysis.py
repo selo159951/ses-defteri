@@ -177,9 +177,10 @@ def test_postprocess():
     assert a["state"] == "done"
     assert [t["line"] for t in r["topics"]] == [1, 4]
     assert r["topics"][0]["start"] == 0 and r["topics"][0]["end"] == 50 and r["topics"][1]["end"] == 70
-    assert [d["line"] for d in r["decisions"]] == [2]
-    assert [(t["owner"], t["line"]) for t in r["tasks"]] == [(1, 5), (0, 4), (None, 5)]
-    assert r["open_questions"] == [{"asker": 1, "text": "Ne zaman?", "line": 4}]
+    assert [d["line"] for d in r["decisions"]] == [2, None]  # a cited id that does not exist is flagged, not dropped
+    assert [d["source_ok"] for d in r["decisions"]] == [True, False]
+    assert [(t["owner"], t["line"]) for t in r["tasks"]] == [(1, 5), (0, 4), (None, 5), (0, None)]
+    assert r["open_questions"] == [{"asker": 1, "text": "Ne zaman?", "line": 4, "source_ok": True}]
     assert [p["id"] for p in r["people"]] == [0, 1]
     assert r["people"][0] == {"id": 0, "contribution": "", "gained": "", "evidence": []}
     assert r["people"][1]["evidence"] == [3, 5]

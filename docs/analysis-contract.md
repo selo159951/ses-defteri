@@ -62,6 +62,15 @@ Stages: `stats` -> `notes` (one LLM call per ~3000-token chunk of lines, saved t
 - `owner` / `asker` are speaker ids or `null`. `due` is free text or `""`. Sub-scores are 0-100 or null (nothing to judge).
   Version 2: every number is computed from the transcript by `analysis.compute_score` (decisions per minute, tasks with owner and due, answered questions, repetition, balance); the model only writes `comment` and `tips`. `overall` is the mean of the non-null parts. `short` = true (under 60 s or 6 lines) has no score and no person review; `warnings` lists steps that failed softly.
 - Every `line` / `evidence` id must exist in the transcript: drop or repair invalid ones after generation.
+- Source links (version 2.1): every decision, task and open question has `line` (segment id the item came from, or `null`)
+  and `source_ok`. `source_ok` is false ("kaynak bulunamadı" in the UI and the exports) when the cited line shares no
+  meaningful word or number with the item, or when the cited id does not exist and no line in the transcript says it.
+  A cited id that does not exist is first repaired by searching the transcript. Items are flagged, never hidden.
+- `chapters`: `[{"title", "summary", "start", "end", "line"}]` (`backend/chapters.py`). The model proposes where a topic
+  starts (a segment id, schema-constrained, read in ~4500-token windows; the previous window's last title is handed on);
+  order, ends, merging of same-titled neighbours and folding of sections shorter than 60 s is done in code. Under 2
+  minutes: none; under 5 minutes: at most 2. Stage `chapters` between `notes` and `merge`, cached in
+  `jobs/<id>/analysis/chapters.json` by transcript hash. A failure only adds a warning. They replace `topics` in the UI and exports.
 - Text is written in the language of the recording (`job["language"]`), names taken from `job["speakers"]`.
 
 ### Job fields (inside the job json, so lists and `get_job` show it)
