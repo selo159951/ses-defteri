@@ -22,6 +22,9 @@ _stop: dict[str, str] = {}  # job id -> "pause" | "cancel", set by request_stop,
 _current: dict[str, str | None] = {"id": None}  # the job that holds the queue lock
 _order: list[str] = []  # waiting jobs, first in first out (the head goes next)
 _order_lock = threading.Lock()
+ASK_TIMEOUT = 120.0  # seconds a job waits for the user's noise-cleanup choice before the automatic decision is used
+_answers: dict[str, dict] = {}  # job id -> the user's choice, put there by answer_noise
+_asking: set[str] = set()  # jobs that are waiting for a choice right now
 
 
 class JobStopped(Exception):
@@ -55,6 +58,14 @@ def request_stop(job_id: str, mode: str) -> None:
     if mode == "pause" and _stop.get(job_id) == "cancel":
         return  # cancel wins
     _stop[job_id] = mode
+
+
+def answer_noise(job_id: str, use_cleaned: bool, dont_ask: bool = False) -> bool:
+    """The user's answer to the noise-cleanup question of a waiting job. False when nothing is being asked."""
+    if job_id not in _asking:
+        return False
+    _answers[job_id] = {"cleaned": bool(use_cleaned), "dont_ask": bool(dont_ask)}
+    return True
 
 
 def _check_stop(job_id: str) -> None:
@@ -196,18 +207,30 @@ def _clean_noise(job_id, jp, job, samples, parts, resume, status, push):
 
     mode = denoise.normalize_mode(asr.get_settings().get("denoise", denoise.DEFAULT_MODE))
     try:
+        if "noise_ask" in job:  # a question left over from a run that was closed while waiting
+            store.update_job(job_id, noise_ask=None)
+        all_done = bool(resume and parts and all((jp / "parts" / f"{i}.json").exists() for i in range(len(parts))))
+        note = None
         if resume and "noise" in job:  # same decision as the first run
             clean, snr = bool(job["noise"].get("cleaned")), job["noise"].get("snr")
         else:
-            clean, snr = denoise.should_denoise(mode, samples)
+            thr = denoise.current_threshold()
+            clean, snr = denoise.should_denoise(mode, samples, thr)
             clean = clean and denoise.available()
-        if resume and parts and all((jp / "parts" / f"{i}.json").exists() for i in range(len(parts))):
+            if mode == "auto" and not all_done and denoise.available():
+                ans = denoise.answers()
+                if denoise.should_ask(snr, ans, thr, asr.get_settings().get("denoise_ask", True) is not False):
+                    clean, note = _ask_user(job_id, jp, samples, snr, thr, clean, status, push)
+        if all_done:
             clean = False  # every part is already transcribed: nothing left to hear
         if snr is not None and snr == snr:  # not NaN (Off mode does not measure)
             snr = round(float(snr), 1)
         else:
             snr = None
-        store.update_job(job_id, noise={"mode": mode, "snr": snr, "cleaned": clean})
+        info = {"mode": mode, "snr": snr, "cleaned": clean}
+        if note:
+            info["choice"] = note  # "user" or "timeout" (the automatic decision was used)
+        store.update_job(job_id, noise=info)
         if not clean:
             return samples
         status["stage"] = "cleaning"
@@ -222,13 +245,59 @@ def _clean_noise(job_id, jp, job, samples, parts, resume, status, push):
                 push(clean_progress=round(p, 2))
 
         out = denoise.denoise(samples, prog)
-        store.update_job(job_id, noise={"mode": mode, "snr": snr, "cleaned": True, "secs": round(time.time() - t0, 1)})
+        store.update_job(job_id, noise={**info, "cleaned": True, "secs": round(time.time() - t0, 1)})
         return out
     except JobStopped:
         raise
     except Exception:  # a broken cleaner must never lose the recording: use the original audio
         traceback.print_exc()
         return samples
+
+
+def _ask_user(job_id, jp, samples, snr, thr, auto_clean, status, push):
+    """Noisy-looking recording: cut a short speech excerpt, clean only that, and let the user hear both before the
+    whole recording is processed. Waits for the answer (pause and cancel still work); after ASK_TIMEOUT seconds the
+    automatic decision `auto_clean` is used so the line never stalls. Returns (clean?, "user" | "timeout").
+    If the excerpt cannot be made the automatic decision is returned without asking."""
+    from . import asr, denoise
+
+    files = [jp / "ab_original.wav", jp / "ab_cleaned.wav"]
+    try:
+        orig, clean = denoise.make_excerpt(samples)
+        denoise.write_wav(files[0], orig)
+        denoise.write_wav(files[1], clean)
+    except Exception:
+        traceback.print_exc()
+        return auto_clean, None
+    status["stage"] = "awaiting_choice"
+    _answers.pop(job_id, None)
+    _asking.add(job_id)
+    deadline = time.time() + ASK_TIMEOUT
+    try:
+        push(noise_ask={"snr": round(float(snr), 1), "threshold": round(float(thr), 1), "auto": bool(auto_clean),
+                        "original": files[0].name, "cleaned": files[1].name, "deadline": deadline})
+        ans = None
+        while ans is None and time.time() < deadline:
+            _check_stop(job_id)  # pause / cancel while waiting
+            ans = _answers.pop(job_id, None)
+            if ans is None:
+                time.sleep(0.05)
+    finally:
+        _asking.discard(job_id)
+        _answers.pop(job_id, None)
+        for f in files:
+            f.unlink(missing_ok=True)
+        try:
+            store.update_job(job_id, noise_ask=None)
+        except (OSError, ValueError):
+            pass
+    status["stage"] = "converting"
+    if ans is None:
+        return auto_clean, "timeout"
+    denoise.record_choice(snr, ans["cleaned"])
+    if ans["dont_ask"]:
+        asr.set_setting("denoise_ask", False)
+    return ans["cleaned"], "user"
 
 
 def _parallel_enabled() -> bool:

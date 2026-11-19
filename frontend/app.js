@@ -183,6 +183,58 @@ function renderQueue(q) {
   box.replaceChildren(...parts);
 }
 
+/* Noise-cleanup question (A/B popup): the running recording waits for "use cleaned" / "use original".
+   Both play buttons play the same short excerpt; only one plays at a time. */
+let askKey = null, askTimer = null;
+function abStop() {
+  [$("abAudO"), $("abAudC")].forEach((a) => a.pause());
+  [["abPlayO", "abAudO"], ["abPlayC", "abAudC"]].forEach(([b]) => { $(b).classList.remove("on"); $(b).dataset.icon = "play"; });
+  hydrateIcons($("abDlg"));
+}
+function abPlay(btn, aud) {
+  const other = btn === "abPlayO" ? "abAudC" : "abAudO";
+  const a = $(aud);
+  if (!a.paused) return abStop();
+  abStop();
+  a.currentTime = 0; a.play().catch(() => {});
+  $(btn).classList.add("on"); $(btn).dataset.icon = "pause"; hydrateIcons($("abDlg"));
+  a.onended = abStop;
+}
+$("abPlayO").onclick = () => abPlay("abPlayO", "abAudO");
+$("abPlayC").onclick = () => abPlay("abPlayC", "abAudC");
+$("abDlg").addEventListener("cancel", (e) => e.preventDefault()); // Esc does not dismiss: a choice is needed (or the timeout decides)
+async function abAnswer(cleaned) {
+  const id = askKey?.split("|")[0];
+  abStop();
+  try { await call("answer_noise", id, cleaned, $("abDont").checked); } catch (e) { /* the poll closes the popup */ }
+  closeAsk();
+  try { lastSettings = await call("get_settings"); renderDenoise(); } catch (e) { /* shown next time */ }
+}
+$("abUseC").onclick = () => abAnswer(true);
+$("abUseO").onclick = () => abAnswer(false);
+function closeAsk() {
+  clearInterval(askTimer); askTimer = null; askKey = null;
+  abStop();
+  if ($("abDlg").open) $("abDlg").close();
+}
+function showAsk(ask) {
+  if (!ask) { if (askKey) closeAsk(); return; }
+  const key = ask.id + "|" + ask.deadline;
+  if (key === askKey) return;
+  closeAsk(); askKey = key;
+  const src = (f) => `${MEDIA}/${ask.id}/${f}?v=${Math.round(ask.deadline)}`;
+  $("abAudO").src = src(ask.original); $("abAudC").src = src(ask.cleaned);
+  $("abDont").checked = false;
+  $("abDesc").textContent = t("ab_desc", { name: ask.filename, s: 12 });
+  $("abInfo").textContent = t("ab_info", { snr: ask.snr, thr: ask.threshold });
+  const tick = () => {
+    const s = Math.max(0, Math.round(ask.deadline - Date.now() / 1000));
+    $("abTimer").textContent = t("ab_timer", { s, choice: t(ask.auto ? "ab_choice_clean" : "ab_choice_orig") });
+  };
+  tick(); askTimer = setInterval(tick, 1000);
+  if (!$("abDlg").open) $("abDlg").showModal();
+}
+
 /* keeps the queue line and the list fresh, and gives the box back to the running recording
    (for instance after the one in the box was cancelled) */
 async function pollQueue() {
@@ -191,6 +243,7 @@ async function pollQueue() {
   const sig = (q.running?.id || "") + "|" + (q.queued || []).map((x) => x.id).join(",");
   if (sig !== lastQueueSig) { lastQueueSig = sig; if (!$("home").hidden) loadJobs(); }
   renderQueue(q);
+  showAsk(q.ask);
   if (!q.running && !(q.queued || []).length && watching === null) batch = 0;
   if (watching === null && q.running && !$("home").hidden) watch(q.running.id, q.running.filename);
 }
@@ -808,7 +861,7 @@ setInterval(refreshWatch, 3000);
 function setLang(l, persist = true) {
   LANG = I18N[l] ? l : "en";
   $("langSel").value = LANG;
-  applyI18n(); renderCredits(); renderWatch();
+  applyI18n(); renderCredits(); renderWatch(); renderDenoise();
   if (gpuState) showGpu(gpuState);
   if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
@@ -850,6 +903,17 @@ window.addEventListener("beforeunload", () => save());
 $("meetingMode").onchange = (e) => call("set_settings", { meeting_mode: e.target.checked }).catch(() => {});
 $("learnPeople").onchange = (e) => call("set_settings", { learn_people: e.target.checked }).catch(() => {});
 $("denoiseMode").onchange = (e) => call("set_settings", { denoise: e.target.value }).catch(() => {});
+$("denoiseAsk").onchange = (e) => call("set_settings", { denoise_ask: e.target.checked }).catch(() => {});
+let lastSettings = null;
+function renderDenoise() {
+  const st = lastSettings;
+  if (!st) return;
+  $("denoiseAsk").checked = st.denoise_ask !== false;
+  $("dnThr").textContent = st.denoise_answers
+    ? t("dn_thr", { v: st.denoise_threshold, n: st.denoise_answers }) : t("dn_thr_default", { v: st.denoise_threshold ?? 8 });
+  $("dnReset").disabled = !st.denoise_answers;
+}
+$("dnReset").onclick = async () => { try { lastSettings = await call("reset_denoise_threshold"); renderDenoise(); } catch (e) { /* ignore */ } };
 $("langMode").onchange = (e) => call("set_settings", { language: e.target.value }).catch(() => {});
 
 window.splash?.step(70, "settings");
@@ -860,7 +924,8 @@ call("get_settings")
     $("learnPeople").checked = st.learn_people !== false;
     $("langMode").value = st.language || "auto";
     refreshWatch();
-    $("denoiseMode").value = st.denoise || "off";
+    $("denoiseMode").value = st.denoise || "auto";
+    lastSettings = st; renderDenoise();
     setLang(st.ui_lang || (navigator.language.startsWith("tr") ? "tr" : "en"), false);
   })
   .catch(() => setLang("tr", false))

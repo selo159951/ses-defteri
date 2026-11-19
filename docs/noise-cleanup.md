@@ -1,6 +1,6 @@
 # Noise cleanup before transcription
 
-Setting "Noise cleanup" (Off / Automatic / Always), default **Off**. Everything runs on this PC: the
+Setting "Noise cleanup" (Off / Automatic / Always), default **Automatic** (which asks the user, see below). Everything runs on this PC: the
 GTCRN speech denoiser of sherpa-onnx (`models/gtcrn_simple.onnx`, 0.5 MB, downloaded once by
 `fetch_models.py` and bundled with the app like the speaker models). Only the transcription hears
 the cleaned audio. Speaker separation, voice matching and the playback mp3 use the original.
@@ -46,13 +46,38 @@ cleaned audio 0.97-1.00 and 0.48. Cleaning never helped, so speakers are always 
 
 ## Policy
 
-- Off (default): nothing changes, no extra time.
-- Automatic: estimates the speech-to-noise ratio from the energy of 25 ms frames (loud frames vs
-  the quietest 10 %; about 0.1 s per minute of audio) and cleans only when it is below 8 dB.
-  This is for very bad recordings, where there is little to lose. On the test material this
-  rule would not have hurt much but also did not help; it stays an opt-in.
+- Off: nothing changes, no extra time.
+- Automatic (default): estimates the speech-to-noise ratio from the energy of 25 ms frames (loud frames vs
+  the quietest 10 %; about 0.1 s per minute of audio) and cleans when it is below the threshold (8 dB
+  until the user's answers move it). Because cleaning helps some recordings and hurts others, the
+  decision is not silent, see "Asking the user".
 - Always: cleans every recording.
 - A missing model file or an error in the cleaner falls back to the original audio.
+
+## Asking the user (Automatic mode)
+
+Right after conversion, when the estimated SNR is near or below the threshold, a ~12 s excerpt with
+speech (the noisiest window that is at least 40 % speech) is cut out, only the excerpt is cleaned
+(loudness matched) and both versions are written to the job folder (`ab_original.wav`,
+`ab_cleaned.wav`, served by the media virtual host). The app shows a popup with two play buttons
+(same excerpt) and "use cleaned" / "use original". Until an answer arrives the job shows "Waiting for
+your choice" (pause and cancel work). After 2 minutes without an answer the automatic decision is
+used and noted in the job (`noise.choice = "timeout"`) so the queue never stalls. Each file asks.
+The excerpt files are deleted after the choice. "Do not ask again" (also a setting) makes the mode
+fully automatic with the learned threshold.
+
+Who is asked: recordings within +-3 dB of the threshold (both sides, so answers arrive from both
+directions) and noisier ones, except when the last three answers far below the threshold (more than
+3 dB) were all "cleaned". Clearly clean recordings are never asked about.
+
+## Learning the threshold
+
+Each answer is stored as (SNR, chose cleaned) in the settings (latest 40). The threshold is the
+midpoint between the highest SNR where the user chose cleaned and the lowest SNR where the user chose
+original. With answers on one side only it is pushed 1.5 dB past the extreme answer (never back
+toward the other side of 8 dB). Few answers move it only partly: weight n/6, full after 6 answers.
+Clamped to 0-20 dB. A timeout teaches nothing. Settings show the learned value (read-only) and a
+Reset button.
 
 ## Speed
 

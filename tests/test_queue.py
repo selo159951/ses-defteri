@@ -114,7 +114,7 @@ def test_queue_listing_and_cancel_of_a_queued_middle_job(tmp_path, rec):
     assert all_idle([a, c])
     assert rec.order == ["a.wav", "c.wav"]
     assert not store.job_path(b).exists() and api.get_job(c)["status"] == "done"
-    assert api.get_queue() == {"running": None, "queued": []}
+    assert api.get_queue() == {"running": None, "ask": None, "queued": []}
 
 
 def test_pause_running_lets_next_start_and_resume_goes_to_the_end(tmp_path, rec):

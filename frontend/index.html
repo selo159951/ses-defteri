@@ -40,9 +40,12 @@
         <span id="watchDir" class="hint"></span></div>
     </div>
     <label class="langmode"><span data-i18n="denoise_label"></span>
-      <select id="denoiseMode"><option value="off" data-i18n="dn_off"></option><option value="auto" data-i18n="dn_auto"></option>
+      <select id="denoiseMode"><option value="auto" data-i18n="dn_auto"></option><option value="off" data-i18n="dn_off"></option>
         <option value="always" data-i18n="dn_always"></option></select></label>
     <p class="hint meetmodehint" data-i18n="denoise_hint"></p>
+    <label class="toggle meetmode"><input type="checkbox" id="denoiseAsk"><span class="knob"></span><span data-i18n="dn_ask"></span></label>
+    <div class="watchrow"><span id="dnThr" class="hint"></span>
+      <button id="dnReset" type="button" class="small" data-icon="refresh" data-i18n="dn_reset"></button></div>
     <label class="langmode"><span data-i18n="rec_language"></span>
       <select id="langMode"><option value="auto" data-i18n="rl_auto"></option><option value="mixed" data-i18n="rl_mixed"></option>
         <option value="tr" data-i18n="rl_tr"></option><option value="en" data-i18n="rl_en"></option></select></label>
@@ -172,6 +175,23 @@
   </table>
   <p class="hint helptip" data-i18n="tip"></p>
   <form method="dialog"><button data-i18n="close"></button></form>
+</dialog>
+
+<dialog id="abDlg">
+  <h3 data-i18n="ab_title"></h3>
+  <p class="hint" id="abDesc"></p>
+  <div class="abrow">
+    <button id="abPlayO" type="button" class="abplay" data-icon="play" data-i18n="ab_orig"></button>
+    <button id="abPlayC" type="button" class="abplay" data-icon="play" data-i18n="ab_clean"></button>
+  </div>
+  <p class="hint" id="abInfo"></p>
+  <label class="abdont"><input type="checkbox" id="abDont"> <span data-i18n="ab_dont"></span></label>
+  <p class="hint" id="abTimer"></p>
+  <div class="abchoose">
+    <button id="abUseC" type="button" class="primary" data-icon="check" data-i18n="ab_use_clean"></button>
+    <button id="abUseO" type="button" data-icon="check" data-i18n="ab_use_orig"></button>
+  </div>
+  <audio id="abAudO" preload="auto"></audio><audio id="abAudC" preload="auto"></audio>
 </dialog>
 
 <dialog id="aboutDlg">

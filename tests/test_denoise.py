@@ -13,6 +13,11 @@ SR = 16000
 RNG = np.random.default_rng(0)
 
 
+@pytest.fixture(autouse=True)
+def _temp_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path / "home"))
+
+
 def _speechlike(seconds=20):
     """Bursts of a 300 Hz tone shaped like words, with silent gaps."""
     t = np.arange(SR * seconds) / SR
@@ -47,7 +52,8 @@ def test_policy_modes():
     assert denoise.should_denoise("always", quiet)[0] is True
     assert denoise.should_denoise("auto", quiet)[0] is False
     assert denoise.should_denoise("auto", noisy)[0] is True
-    assert denoise.should_denoise("nonsense", noisy)[0] is False  # unknown value = default (off)
+    assert denoise.should_denoise("nonsense", noisy)[0] is True  # unknown value = default (auto): noisy -> clean
+    assert denoise.should_denoise("nonsense", quiet)[0] is False
     assert denoise.normalize_mode(None) == denoise.DEFAULT_MODE
 
 
@@ -76,6 +82,7 @@ def fake(monkeypatch, tmp_path):
     monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path))
     monkeypatch.setenv("SESDEFTERI_SEQUENTIAL", "1")
     pipeline._stop.clear()
+    asr.set_setting("denoise_ask", False)  # these tests are about the automatic decision; the popup has its own tests
     state = {"audio": _speechlike(30), "cleaned": 0, "asr_input": [], "diar_input": []}
 
     monkeypatch.setattr(audio, "convert", lambda src, dst: (Path(dst).write_bytes(b"x"), (state["audio"], 30.0))[1])
@@ -118,10 +125,10 @@ def _run(tmp_path, mode=None):
     return jid, store.read_transcript(jid)
 
 
-def test_default_is_off(fake, tmp_path):
+def test_default_is_auto(fake, tmp_path):
     fake["audio"] = _with_noise(_speechlike(30), 0)
     jid, j = _run(tmp_path)
-    assert fake["cleaned"] == 0 and j["noise"]["mode"] == "off"
+    assert fake["cleaned"] == 1 and j["noise"]["mode"] == "auto"
 
 
 def test_off_never_cleans(fake, tmp_path):
@@ -177,6 +184,6 @@ def test_playback_mp3_is_the_original(fake, tmp_path):
 def test_settings_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("SESDEFTERI_HOME", str(tmp_path))
     api = bridge.Api(window_getter=lambda: None)
-    assert api.get_settings()["denoise"] == "off"
-    assert api.set_settings({"denoise": "auto"})["denoise"] == "auto"
-    assert api.set_settings({"denoise": "bogus"})["denoise"] == "auto"
+    assert api.get_settings()["denoise"] == "auto"
+    assert api.set_settings({"denoise": "off"})["denoise"] == "off"
+    assert api.set_settings({"denoise": "bogus"})["denoise"] == "off"

@@ -154,8 +154,23 @@ class Api(SystemApi, LlmApi, SearchApi):
                 return None  # removed meanwhile
 
         cur = pipeline._current["id"]
-        return {"running": entry(cur) if cur else None,
+        running = entry(cur) if cur else None
+        ask = None
+        if running:  # the running recording waits for the noise-cleanup choice
+            try:
+                ask = store.read_transcript(cur).get("noise_ask")
+            except (OSError, ValueError):
+                ask = None
+        return {"running": running, "ask": {"id": cur, "filename": running["filename"], **ask} if ask and running else None,
                 "queued": [e for e in map(entry, pipeline.queue_ids()) if e]}
+
+    def answer_noise(self, job_id: str, use_cleaned: bool, dont_ask: bool = False) -> dict:
+        """The popup's answer: use the cleaned or the original audio for this recording."""
+        return {"ok": pipeline.answer_noise(job_id, bool(use_cleaned), bool(dont_ask))}
+
+    def reset_denoise_threshold(self) -> dict:
+        denoise.reset_learning()
+        return self.get_settings()
 
     def resume_job(self, job_id: str) -> dict:
         """Continue a job that was interrupted (app closed while it was running)."""
@@ -209,6 +224,9 @@ class Api(SystemApi, LlmApi, SearchApi):
         return {**asr.status(), "meeting_mode": bool(asr.get_settings().get("meeting_mode", False)), "language": asr.language_mode(),
                 "learn_people": bool(asr.get_settings().get("learn_people", True)),
                 "denoise": denoise.normalize_mode(asr.get_settings().get("denoise")),
+                "denoise_ask": asr.get_settings().get("denoise_ask", True) is not False,
+                "denoise_threshold": round(denoise.current_threshold(), 1),
+                "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
                 "tour_job_done": bool(asr.get_settings().get("tour_job_done", False))}
 
@@ -223,6 +241,8 @@ class Api(SystemApi, LlmApi, SearchApi):
             asr.set_setting("learn_people", bool(values["learn_people"]))
         if values.get("denoise") in denoise.MODES:
             asr.set_setting("denoise", values["denoise"])
+        if "denoise_ask" in values:
+            asr.set_setting("denoise_ask", bool(values["denoise_ask"]))
         for key in ("tour_home_done", "tour_job_done"):
             if key in values:
                 asr.set_setting(key, bool(values[key]))
