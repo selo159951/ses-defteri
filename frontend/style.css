@@ -35,6 +35,17 @@ button.small { padding:1px 8px; font-size:12px; }
 .jsnip { display:block; font-size:13px; margin-top:4px; color:var(--fg); background:var(--card); border-left:3px solid var(--hitcur); padding:3px 8px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:0 6px 6px 0; }
 .jsnip:hover { border-color:var(--accent); background:var(--bg); outline:1px solid var(--line); }
 .jtime { font-family:ui-monospace, Consolas, monospace; color:var(--accent); }
+#jSem.on { border-color:var(--accent); color:var(--accent); background:var(--s0); } #jSem .ic { vertical-align:-3px; }
+#semBox { margin:12px 0; } #semBox .semnote { font-size:13px; color:var(--muted); margin:0 0 8px; }
+#semBox ul { list-style:none; padding:0; margin:0; }
+#semBox li { border-bottom:1px solid var(--line); }
+.semres { display:block; padding:10px 4px; color:var(--fg); text-decoration:none; cursor:pointer; }
+.semres:hover, .semres:focus-visible { background:var(--card); outline:none; }
+.semhead { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; font-size:13px; color:var(--muted); }
+.semres .jtitle { font-size:15px; } .sempass { margin-top:3px; border-left:3px solid var(--hitcur); padding:2px 10px; }
+.semexact { font-size:11px; padding:0 7px; border-radius:10px; border:1px solid var(--line); }
+.semprep { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.semprep .bar { width:100%; max-width:420px; }
 .jwhere { font-size:12px; color:var(--muted); margin-top:4px; }
 mark { background:var(--hit); color:inherit; border-radius:2px; padding:0 1px; }
 .seg.flash { animation:flash 1.6s ease-out; }

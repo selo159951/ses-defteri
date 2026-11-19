@@ -16,6 +16,7 @@ from . import pipeline
 from .watcher import Watcher
 from .pipeline import run_job
 from .llm_api import LlmApi
+from .search_api import SearchApi
 from .system_api import SystemApi
 
 EXPORT_TYPES = {
@@ -64,7 +65,7 @@ def _job(job_id: str) -> dict:
         raise ValueError("job not found") from None
 
 
-class Api(SystemApi, LlmApi):
+class Api(SystemApi, LlmApi, SearchApi):
     """Methods starting with "_" are not exposed to the page."""
 
     def __init__(self, window_getter=None):

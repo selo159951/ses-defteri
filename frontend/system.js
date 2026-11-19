@@ -73,7 +73,7 @@ Object.assign(I18N.tr, {
   const ENG_KEY = { auto: "eng_auto", "ct2-cuda": "eng_ct2_cuda", "ct2-cpu": "eng_ct2_cpu", whispercpp: "eng_whispercpp" };
   const MODEL_KEY = { "large-v3-turbo": "m_large", medium: "m_medium", small: "m_small" };
   const MODEL_DESC = { "large-v3-turbo": "m_large_d", medium: "m_medium_d", small: "m_small_d" };
-  let info = null, llm = null, wiz = false, pollT = null, lastStatus = null, techOpen = false;
+  let info = null, llm = null, sem = null, wiz = false, pollT = null, lastStatus = null, techOpen = false;
 
   /* ---------- duration / ETA (also used by watch() in app.js) ---------- */
   function dur(s) {
@@ -125,9 +125,10 @@ Object.assign(I18N.tr, {
   async function refresh() {
     info = await call("get_system_info");
     llm = await loadLlm();
+    sem = await call("get_search_info").catch(() => null);
     render();
     const test = info.test.state === "running", dl = info.download.state === "running";
-    const llmDl = !!llm?.download?.running; // analysis-model download: poll once a second
+    const llmDl = !!llm?.download?.running || !!sem?.download?.running; // analysis / search model download: poll once a second
     clearTimeout(pollT);
     if ((test || dl || llmDl) && !page.hidden) pollT = setTimeout(refresh, llmDl && !test && !dl ? 1000 : 700);
     else if (wiz) wizStep();
@@ -204,11 +205,31 @@ Object.assign(I18N.tr, {
 
     // analysis model (meeting mode)
     if (llm) kids.push(llmCard());
+    if (sem) kids.push(semCard());
 
     // technical details
     const tech = { plan, settings: set, engines: info.engines, hardware: hw };
     kids.push(el("details", { className: "tech", open: techOpen, ontoggle: (e) => { techOpen = e.target.open; } }, el("summary", { textContent: t("details") }), el("pre", { textContent: JSON.stringify(tech, null, 2) })));
     page.replaceChildren(...kids);
+  }
+
+  /* Search-by-meaning card: the small embedding model (one download), and how many recordings are ready. */
+  function semCard() {
+    const dl = sem.download || {}, mbs = (b) => Math.round(b / 1048576) + " MB";
+    const btn = el("button");
+    if (sem.downloaded) { btn.replaceChildren(icText("check", t("downloaded"))); btn.disabled = true; }
+    else if (dl.running) { btn.textContent = t("downloading"); btn.disabled = true; }
+    else {
+      btn.className = "primary";
+      btn.textContent = `${t("download")} (${mbs(sem.size)})`;
+      btn.onclick = async () => { try { await call("download_search_model"); } catch (e) { toast(String(e?.message || e)); } refresh(); };
+    }
+    const meta = [mbs(sem.size), sem.downloaded ? `${t("sem_indexed")}: ${sem.indexed}/${sem.total}` : ""].filter(Boolean).join(" · ");
+    const row = el("div", { className: "mrow" + (sem.downloaded ? " cur" : "") },
+      el("div", { className: "minfo" }, line(sem.label, "strong"), line(meta, "dim")), btn);
+    if (dl.running) row.append(el("div", { className: "bar full" }, el("div", { style: `width:${Math.round((dl.done / Math.max(dl.total, 1)) * 100)}%` })));
+    if (dl.error) row.append(line(t("dl_error", { e: dl.error }), "warn"));
+    return card(t("sem_title"), line(t("sem_card_note"), "dim"), row);
   }
 
   /* Analysis model card: device, catalog, download progress, automatic/manual choice. */
