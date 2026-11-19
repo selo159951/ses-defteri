@@ -28,4 +28,11 @@ if ($Gpu) {
     }
     Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-NVIDIA.zip SesDefteri-NVIDIA; Pop-Location  # Windows' own tar writes real zip files (Git's tar.exe would not)
 }
-Write-Host "Done. Share the .zip files in dist\ (unzip, run SesDefteri.exe)"
+# installers (Inno Setup 6): per-user install with Start menu and desktop shortcuts
+$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($iscc) {
+    & $iscc /Q /DSrc=..\dist\SesDefteri /DOutName=SesDefteri-Setup installer\SesDefteri.iss
+    if ($Gpu) { & $iscc /Q /DSrc=..\dist\SesDefteri-NVIDIA /DOutName=SesDefteri-NVIDIA-Setup installer\SesDefteri.iss }
+} else { Write-Warning "Inno Setup 6 not found: no Setup.exe (the .zip files are still built)" }
+Write-Host "Done. Share dist\SesDefteri-Setup.exe (or the .zip files: unzip, run SesDefteri.exe)"
