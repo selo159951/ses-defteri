@@ -930,3 +930,17 @@ call("get_settings")
   })
   .catch(() => setLang("tr", false))
   .finally(() => window.splash?.done());
+
+/* "Seçenekler": the drop-area settings sit behind one button; next to it a short line says which ones are on */
+(() => {
+  const box = $("optsBox");
+  if (!box) return;
+  const names = [["meetingMode", "meeting_mode"], ["learnPeople", "learn_people"], ["watchOn", "watch_on"]];
+  const sum = () => {
+    const on = names.filter(([id]) => $(id) && $(id).checked).map(([, k]) => t(k));
+    $("optsSum").textContent = on.length ? t("opts_on", { list: on.join(", ") }) : "";
+  };
+  box.addEventListener("change", sum);
+  setInterval(sum, 1500);  // settings are filled in after start-up and by the folder watch
+  document.addEventListener("click", (e) => { if (box.open && !box.contains(e.target)) box.open = false; });
+})();

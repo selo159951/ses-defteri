@@ -95,6 +95,7 @@ const I18N = {
     learn_people_hint: "The voices of people who introduce themselves are saved to People so they are recognised in later meetings",
     // ---- meeting mode / analysis ----
     tab_text: "Text", tab_analysis: "Analysis",
+    options: "Options", opts_on: "on: {list}",
     meeting_mode: "Meeting mode", meeting_mode_hint: "The analysis is prepared in the background after the recording is transcribed.",
     badge_analysing: "Analysing", badge_analysis_ready: "Analysis ready",
     an_none_desc: "The meeting summary, decisions, tasks and open questions are prepared by the on-device AI. Your recording never leaves this computer.",
@@ -291,6 +292,7 @@ const I18N = {
     learn_people_hint: "Kendini tanıtan kişilerin sesi Kişiler'e kaydedilir; sonraki toplantılarda tanınırlar",
     // ---- toplantı modu / analiz ----
     tab_text: "Metin", tab_analysis: "Analiz",
+    options: "Seçenekler", opts_on: "açık: {list}",
     meeting_mode: "Toplantı modu", meeting_mode_hint: "Kayıt yazıya dökülünce analiz de arkada hazırlanır.",
     badge_analysing: "Analiz ediliyor", badge_analysis_ready: "Analiz hazır",
     an_none_desc: "Toplantı özeti, kararlar, görevler ve açık sorular cihazdaki yapay zekâ ile hazırlanır. Kaydınız bu bilgisayardan çıkmaz.",
