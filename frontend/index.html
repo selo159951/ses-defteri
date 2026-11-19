@@ -53,6 +53,7 @@
     <h2><span data-i18n="prev_recordings"></span> <span id="jobCount"></span></h2>
     <div id="jobFilters">
       <input id="jq" type="search" data-i18n-ph="jq_ph">
+      <button id="jSem" class="small" data-icon="sparkles" data-i18n="sem_toggle" data-i18n-title="sem_toggle_tip" aria-pressed="false"></button>
       <select id="jStatus">
         <option value="" data-i18n="all_statuses"></option><option value="done" data-i18n="st_done"></option>
         <option value="running" data-i18n="st_running"></option><option value="error" data-i18n="st_error"></option>
@@ -65,6 +66,7 @@
       </select>
     </div>
   </div>
+  <div id="semBox" hidden></div>
   <ul id="jobs"></ul>
   <p id="jobsEmpty" class="hint" hidden></p>
   <p class="credits" id="creditsLine"></p>
@@ -169,6 +171,7 @@
 </dialog>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
+<script src="search.js"></script>
 <script src="system.js"></script>
 <script src="people.js"></script>
 <script src="analysis.js"></script>

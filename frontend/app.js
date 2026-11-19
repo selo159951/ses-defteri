@@ -34,6 +34,7 @@ let jobsTimer = null;
 
 async function loadJobs() {
   const q = $("jq").value.trim();
+  if (window.semActive?.(q)) return window.semLoad(q); // search by meaning (search.js) takes over the list
   let list = await call("list_jobs", q);
   const langs = [...new Set(list.map((j) => j.language).filter(Boolean))].sort();
   const lf = $("jLang"), curLang = lf.value;
@@ -50,6 +51,7 @@ async function loadJobs() {
   $("jobCount").textContent = list.length ? `(${list.length})` : "";
   $("jobsEmpty").hidden = !!list.length;
   $("jobsEmpty").textContent = q || st || lang ? t("no_match_rec") : t("no_rec");
+  if (q && !list.length) window.semOffer?.($("jobsEmpty"), q); // no keyword hit: offer the search by meaning
   $("jobs").replaceChildren(...list.map((j) => jobRow(j, q)));
 }
 

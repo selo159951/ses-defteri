@@ -15,6 +15,7 @@ Turns meeting recordings (40–80 min and longer) into an editable transcript wi
 - Speaker names also guessed from "ben Selim", "benim adım…", "my name is…", "Umut sen…"
 - Click a time range to replay it, fix text in place (autosaved), select part of a line → "Who said this?"
 - Add / remove / rename / merge speakers and lines, Undo (Ctrl+Z), search, replace, filters
+- **Search by meaning** across all recordings ("when did we talk about the price rise" finds "zam", "ücretleri yükseltmek"): a small local language model (~130 MB, downloaded once from the home search box or the System page) indexes the recordings in the background while no transcription runs; keyword hits are ranked first
 - **System page**: graphics card, video memory, CPU, RAM, whether the PC is suitable, speed test ("1 min of audio ≈ X s"), engine and model choice
 - Export **Original**, **Edited** or **Both** as Word / TXT / Markdown / SRT / JSON
 - Export the **Analysis** as Word / TXT / Markdown / JSON

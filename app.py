@@ -35,6 +35,12 @@ def main():
     if sys.platform == "win32":
         install_virtual_hosts()
     api = Api()
+    try:  # keeps the meaning-search index of all recordings up to date, only while no transcription runs
+        from backend import semantic
+
+        semantic.start_worker()
+    except Exception as e:
+        print("search indexing could not start:", e, file=sys.stderr)
     # starts maximized; the size below is what "restore down" gives
     window = webview.create_window("Ses Defteri", START_URL, width=1180, height=820,
                                    min_size=(720, 560), maximized=True, js_api=api)

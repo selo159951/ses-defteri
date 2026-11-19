@@ -2,6 +2,8 @@ faster-whisper
 sherpa-onnx
 pywebview
 numpy
+onnxruntime
+tokenizers
 sounddevice
 python-docx
 pytest
