@@ -34,6 +34,8 @@
   function done() {
     const wait = Math.max(0, MIN_MS - (performance.now() - t0));
     setTimeout(() => { step(100, "ready"); finished = true; cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }, wait);
+    // animation frames slow to a crawl when the window is not in front: close on time anyway
+    setTimeout(() => { if (root.isConnected && !root.classList.contains("out")) { fill.style.width = "100%"; pct.textContent = "100%"; hide(); } }, wait + 1200);
   }
   step(15, "boot");
   raf = requestAnimationFrame(draw);

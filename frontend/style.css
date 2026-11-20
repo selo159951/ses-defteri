@@ -335,3 +335,27 @@ header button .ic { width:16px; height:16px; vertical-align:-3px; }
 .langwrap .langic .ic { width:15px; height:15px; }
 .langwrap select { padding-left:28px; }
 header .langwrap #langSel { padding-left:30px; }
+
+/* loading placeholders (skeleton.js): grey boxes, a light band sweeps across, then the content fades in */
+.skeleton { display:flex; flex-direction:column; gap:14px; padding:4px 0; }
+.sk { position:relative; overflow:hidden; border-radius:8px; background:color-mix(in srgb, var(--fg) 8%, transparent); }
+.sk::after { content:""; position:absolute; inset:0; transform:translateX(-100%);
+  background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg) 75%, transparent), transparent);
+  animation:skshim 1.4s ease-in-out var(--d, 0s) infinite; }
+@keyframes skshim { 0% { transform:translateX(-100%); } 60%, 100% { transform:translateX(100%); } }
+.sk-h2 { width:180px; height:22px; }
+.sk-banner { height:52px; border-radius:12px; }
+.sk-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; }
+.sk-card { border:1px solid var(--line); border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:10px; background:var(--card); }
+.sk-l { height:12px; width:100%; } .sk-l.m { width:70%; } .sk-l.s { width:40%; height:10px; }
+.sk-btn { width:120px; height:34px; }
+.sk-row { flex-direction:row; align-items:center; gap:14px; }
+.sk-av { width:42px; height:42px; border-radius:50%; flex:none; }
+.sk-col { display:flex; flex-direction:column; gap:8px; flex:1; }
+.sk-seg { display:flex; gap:14px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--line); }
+.sk-time { width:160px; height:30px; flex:none; } .sk-chip { width:130px; height:30px; flex:none; }
+.fadein > * { animation:fadeup .35s ease-out both; }
+.fadein > *:nth-child(2) { animation-delay:.04s; } .fadein > *:nth-child(3) { animation-delay:.08s; }
+.fadein > *:nth-child(4) { animation-delay:.12s; } .fadein > *:nth-child(n+5) { animation-delay:.16s; }
+@keyframes fadeup { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .sk::after, .fadein > * { animation:none; } }

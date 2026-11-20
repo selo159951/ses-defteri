@@ -313,13 +313,18 @@ async function finished(id) {
 
 /* ================= transcript state ================= */
 async function openJob(id) {
-  const j = await call("get_job", id);
-  undoStack = []; updateUndo();
+  // switch pages at once and show placeholder lines; the recording (can be long) loads behind them
   $("home").hidden = true; $("view").hidden = false; $("player").hidden = false; $("homeBtn").hidden = false;
+  $("title").textContent = ""; $("speakers").replaceChildren(); skeleton($("segs"), "lines");
+  let j;
+  try { j = await call("get_job", id); }
+  catch (e) { $("segs").replaceChildren(); throw e; }
+  undoStack = []; updateUndo();
   $("title").textContent = j.filename + (j.language ? `  (${j.language})` : "");
   $("audio").src = `${MEDIA}/${id}/audio.mp3`;
   $("q").value = ""; $("fSpk").value = ""; $("fEdited").checked = false; $("fMatch").checked = false;
   applyJob(j);
+  fadeIn($("segs"));
   window.analysisHooks?.opened(j); // analysis.js: stop polling, back to the Metin tab
 }
 

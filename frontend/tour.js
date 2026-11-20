@@ -216,7 +216,14 @@
   function watchView() {
     new MutationObserver(() => {
       if (view().hidden || cur || jobDone) return;
-      setTimeout(() => { if (!view().hidden && !cur && !jobDone) { jobDone = true; start("job"); } }, 700);
+      // wait until the recording has loaded (the placeholder lines are gone), then start
+      const ready = () => !document.querySelector("#segs > .skeleton");
+      const go = (tries = 0) => {
+        if (view().hidden || cur || jobDone) return;
+        if (!ready() && tries < 60) return setTimeout(() => go(tries + 1), 250);
+        jobDone = true; start("job");
+      };
+      setTimeout(go, 700);
     }).observe(view(), { attributes: true, attributeFilter: ["hidden"] });
   }
 
