@@ -1,4 +1,4 @@
-﻿# Build the simple app: .\build_windows.ps1  ->  Desktop\SesDefteri-Basit (folder) and Desktop\SesDefteri-Basit.zip
+﻿# Build the simple app: .\build_windows.ps1  ->  Desktop\Projeler\Ses Defteri\Basit Sürüm (setup, zip, folder)
 # One package for every PC: runs on the processor, the speech model is downloaded on first start (internet once).
 # Uses the Python environment of the full project next to it (..\meet_speech_to_text\.venv).
 $ErrorActionPreference = "Stop"
