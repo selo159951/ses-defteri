@@ -1,4 +1,4 @@
-# Build the simple app: .\build_windows.ps1  ->  Desktop\SesDefteri-Basit (folder) and Desktop\SesDefteri-Basit.zip
+﻿# Build the simple app: .\build_windows.ps1  ->  Desktop\SesDefteri-Basit (folder) and Desktop\SesDefteri-Basit.zip
 # One package for every PC: runs on the processor, the speech model is downloaded on first start (internet once).
 # Uses the Python environment of the full project next to it (..\meet_speech_to_text\.venv).
 $ErrorActionPreference = "Stop"
@@ -9,19 +9,25 @@ $py = Join-Path $PSScriptRoot "..\meet_speech_to_text\.venv\Scripts"
 foreach ($d in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "python312.dll") {
     if (-not (Test-Path "dist\SesDefteri\_internal\$d")) { throw "$d is missing from the package" }
 }
+# output: Desktop\Projeler\Ses Defteri\Basit Sürüm (setup, zip, and the unzipped folder)
 $desk = [Environment]::GetFolderPath("Desktop")
-$out = Join-Path $desk "SesDefteri-Basit"
+$dest = Join-Path $desk "Projeler\Ses Defteri\Basit Sürüm"
+New-Item -ItemType Directory -Force $dest | Out-Null
+$stage = "dist\SesDefteri-Basit"
+if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+Copy-Item -Recurse dist\SesDefteri $stage
+Copy-Item KULLANIM.txt $stage  # the one-page guide next to the exe
+if (Test-Path dist\SesDefteri-Basit.zip) { Remove-Item -Force dist\SesDefteri-Basit.zip }
+Push-Location dist; & "$env:SystemRoot\System32	ar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
+$out = Join-Path $dest "SesDefteri-Basit (kurulumsuz)"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
-Copy-Item -Recurse dist\SesDefteri $out
-Copy-Item KULLANIM.txt $out  # the one-page guide next to the exe
-$zip = Join-Path $desk "SesDefteri-Basit.zip"
-if (Test-Path $zip) { Remove-Item -Force $zip }
-Push-Location $desk; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
+Copy-Item -Recurse $stage $out
+Copy-Item -Force dist\SesDefteri-Basit.zip $dest
 # installer (Inno Setup 6): per-user, Start menu and desktop shortcut named "Ses Defteri"
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($iscc) {
     & $iscc /Q /DSrc=..\dist\SesDefteri installer\SesDefteri.iss
-    Copy-Item -Force dist\SesDefteri-Basit-Setup.exe (Join-Path $desk "SesDefteri-Basit-Setup.exe")
+    Copy-Item -Force dist\SesDefteri-Basit-Setup.exe $dest
 } else { Write-Warning "Inno Setup 6 not found: no Setup.exe (the folder and .zip are still built)" }
-Write-Host "Done: $out (open SesDefteri.exe), $zip and Desktop\SesDefteri-Basit-Setup.exe"
+Write-Host "Done: $dest"
