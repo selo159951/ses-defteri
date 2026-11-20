@@ -1,7 +1,18 @@
 """Ses Defteri - desktop app (no web server, no open ports)."""
 import sys
+from pathlib import Path
 
 from backend import store
+
+# window and taskbar icon (bundled with the exe under assets/)
+ICON = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets" / "icon.ico"
+if sys.platform == "win32":
+    # own taskbar identity: the taskbar then shows the window icon (not python.exe's when run from source)
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SelimOguz.SesDefteri")
+    except Exception:
+        pass
 
 # One-time: bring an earlier version's data folder (%APPDATA%\Katip or MeetTranscriber) over to %APPDATA%\SesDefteri.
 # Runs before data_dir() is used (also before the log file is opened below).
@@ -54,7 +65,7 @@ def main():
 
     window.events.loaded += on_loaded
     try:
-        webview.start(gui="edgechromium" if sys.platform == "win32" else None,
+        webview.start(gui="edgechromium" if sys.platform == "win32" else None, icon=str(ICON),
                       private_mode=False, storage_path=str(store.data_dir() / "webview"))
     except Exception as e:
         _fatal("Microsoft Edge WebView2 is required.\n"

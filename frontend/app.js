@@ -51,6 +51,7 @@ async function loadJobs() {
   $("jobCount").textContent = list.length ? `(${list.length})` : "";
   $("jobsEmpty").hidden = !!list.length;
   $("jobsEmpty").textContent = q || st || lang ? t("no_match_rec") : t("no_rec");
+  $("jobsEmpty").classList.toggle("norec", !(q || st || lang)); // no recordings at all: show the app icon above the line
   if (q && !list.length) window.semOffer?.($("jobsEmpty"), q); // no keyword hit: offer the search by meaning
   $("jobs").replaceChildren(...list.map((j) => jobRow(j, q)));
 }

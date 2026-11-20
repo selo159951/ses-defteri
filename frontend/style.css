@@ -320,3 +320,18 @@ h4.gtitle { font-size:13px; margin-top:14px; }
 #drop .opts[open] > .optsbody { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:61; width:min(640px, calc(100vw - 32px));
   max-height:85vh; overflow:auto; margin:0; padding:16px 22px 20px; box-shadow:0 12px 40px rgba(0,0,0,.3); text-align:left; }
 #drop .optshead { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:16px; }
+
+/* app icon: splash, header, about, empty list */
+.sicon { display:block; margin:0 auto 18px; width:88px; height:88px; }
+.hlogo { width:28px; height:28px; flex:none; margin-right:-6px; }
+.abouthead { display:flex; align-items:center; gap:12px; }
+#jobsEmpty.norec { text-align:center; padding-top:8px; }
+#jobsEmpty.norec::before { content:""; display:block; width:96px; height:96px; margin:8px auto 14px; background:url(logo.svg) center/contain no-repeat; opacity:.35; }
+
+/* header: icons on the buttons, a globe inside the language picker */
+header button .ic { width:16px; height:16px; vertical-align:-3px; }
+.langwrap { position:relative; display:inline-flex; align-items:center; }
+.langwrap .langic { position:absolute; left:8px; pointer-events:none; color:var(--muted, #6b7280); display:flex; }
+.langwrap .langic .ic { width:15px; height:15px; }
+.langwrap select { padding-left:28px; }
+header .langwrap #langSel { padding-left:30px; }

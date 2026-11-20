@@ -234,8 +234,7 @@
 
   window.startTour = (name = "home") => { if (TOURS[name]) start(name); };
 
-  const again = document.getElementById("tourRestart");
-  if (again) again.onclick = () => {
+  const again = () => {
     document.getElementById("aboutDlg").close();
     jobDone = false;
     call("set_settings", { tour_job_done: false }).catch(() => {});
@@ -243,6 +242,8 @@
     if (!hb.hidden) hb.click();
     whenHomeVisible(() => setTimeout(() => start("home"), 250));
   };
+  // the About dialog button and the header "Guide" button both start the tour again
+  for (const id of ["tourRestart", "guideBtn"]) { const b = document.getElementById(id); if (b) b.onclick = again; }
 
   init();
 })();

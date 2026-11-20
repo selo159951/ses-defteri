@@ -1,4 +1,4 @@
-; Ses Defteri installer (Inno Setup 6). Built by build_windows.ps1:
+﻿; Ses Defteri installer (Inno Setup 6). Built by build_windows.ps1:
 ;   ISCC /DSrc=..\dist\SesDefteri /DOutName=SesDefteri-Setup installer\SesDefteri.iss
 ; Installs for the current user only (no admin rights needed), adds Start menu and desktop shortcuts.
 ; Uninstalling keeps the user's recordings and models (%APPDATA%\SesDefteri).
