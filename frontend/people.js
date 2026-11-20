@@ -22,7 +22,10 @@
     for (const id of ["home", "view", "player"]) $(id).hidden = true;
     root.hidden = false; $("homeBtn").hidden = false;
     S.error = "";
+    const first = !root.firstChild; // first open: placeholder rows while the saved voices load
+    if (first) skeleton(root, "people");
     await refresh();
+    if (first) fadeIn(root);
   }
   function close() { root.hidden = true; if (S.rec) cancelRec(); S.adding = false; }
   $("peopleBtn").onclick = open;

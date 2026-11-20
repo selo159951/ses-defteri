@@ -19,13 +19,14 @@
 </div>
 <script src="splash.js"></script>
 <script src="icons.js"></script>
+<script src="skeleton.js"></script>
 <header><img class="hicon" src="icon.svg" alt="" width="32" height="32"><h1 data-i18n="app">Ses Defteri</h1><button id="homeBtn" hidden data-icon="arrow-left" data-i18n="all_recordings"></button>
   <span class="spacer"></span>
-  <button id="tourBtn" type="button">Nasıl kullanılır?</button>
-  <button id="peopleBtn" data-i18n="people"></button>
-  <select id="langSel"data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select>
+  <button id="tourBtn" type="button" data-icon="book-open">Nasıl kullanılır?</button>
+  <button id="peopleBtn" data-icon="users" data-i18n="people"></button>
+  <span class="langwrap"><span class="langic" data-icon="globe" aria-hidden="true"></span><select id="langSel" data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select></span>
   <button id="aboutBtn" class="icon" data-icon="info" data-i18n-title="about_title"></button>
-  <button id="sysBtn" data-i18n="system">Sistem</button>
+  <button id="sysBtn" data-icon="cpu" data-i18n="system">Sistem</button>
 </header>
 
 <main id="home">

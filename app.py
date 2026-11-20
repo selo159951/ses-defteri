@@ -4,6 +4,17 @@ Whatever goes wrong while starting ends in a Turkish message box and a log file 
 %APPDATA%\\SesDefteriBasit\\logs - never in a window that just closes."""
 import sys
 import traceback
+from pathlib import Path
+
+# window and taskbar icon (bundled with the exe under assets/)
+ICON = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets" / "icon.ico"
+if sys.platform == "win32":
+    # own taskbar identity: the taskbar then shows the window icon (not python.exe's when run from source)
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SelimOguz.SesDefteri.Basit")
+    except Exception:
+        pass
 
 
 def _fatal(msg: str) -> None:
@@ -71,7 +82,7 @@ def main():
                 attached.append(True)
 
         window.events.loaded += on_loaded
-        webview.start(gui="edgechromium" if sys.platform == "win32" else None,
+        webview.start(gui="edgechromium" if sys.platform == "win32" else None, icon=str(ICON),
                       private_mode=False, storage_path=str(store.data_dir() / "webview"))
     except SystemExit:
         raise

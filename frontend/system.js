@@ -112,6 +112,7 @@ Object.assign(I18N.tr, {
   function open() {
     $("home").hidden = true; $("view").hidden = true; $("player").hidden = true;
     page.hidden = false; $("homeBtn").hidden = false;
+    if (!info) skeleton(page, "system"); // first open: placeholder cards while the hardware is read
     refresh();
   }
   function close() { page.hidden = true; }
@@ -208,7 +209,9 @@ Object.assign(I18N.tr, {
     // technical details
     const tech = { plan, settings: set, engines: info.engines, hardware: hw };
     kids.push(el("details", { className: "tech", open: techOpen, ontoggle: (e) => { techOpen = e.target.open; } }, el("summary", { textContent: t("details") }), el("pre", { textContent: JSON.stringify(tech, null, 2) })));
+    const fromSkeleton = hasSkeleton(page);
     page.replaceChildren(...kids);
+    if (fromSkeleton) fadeIn(page);
   }
 
   /* Analysis model card: device, catalog, download progress, automatic/manual choice. */
