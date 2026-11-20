@@ -149,7 +149,7 @@ header h1 { font-size: 24px; }
 body.frActive { overflow: hidden; }
 
 /* ---- app icon ---- */
-.slogoimg { display: block; width: 84px; height: 84px; margin: 0 auto 14px; }
+.slogoimg { display: block; width: 150px; height: 150px; margin: -30px auto -12px; }
 header .hicon { width: 32px; height: 32px; margin-right: 8px; flex: none; }
 header { align-items: center; }
 .abouticon { display: block; width: 64px; height: 64px; margin: 0 0 8px; }
@@ -207,3 +207,8 @@ header { align-items: center; }
 .abchoose button { font-size: 17px; padding: 10px 16px; display: inline-flex; align-items: center; gap: 8px; }
 .abchoose .primary { background: var(--accent); color: #fff; border-color: transparent; }
 #jobsEmpty { text-align: center; }
+
+/* animated microphone (loading.svg) next to the file being processed; rests when paused or failed */
+.phead { display: flex; align-items: center; gap: 4px; }
+.pani { width: 56px; height: 56px; margin: -12px -6px -12px -14px; flex: none; }
+#progress.paused .pani, #progress.failed .pani { visibility: hidden; }
