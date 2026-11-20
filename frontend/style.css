@@ -322,7 +322,7 @@ h4.gtitle { font-size:13px; margin-top:14px; }
 #drop .optshead { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:16px; }
 
 /* app icon: splash, header, about, empty list */
-.sicon { display:block; margin:0 auto 18px; width:88px; height:88px; }
+.sicon { display:block; margin:-30px auto -14px; width:150px; height:150px; }
 .hlogo { width:28px; height:28px; flex:none; margin-right:-6px; }
 .abouthead { display:flex; align-items:center; gap:12px; }
 #jobsEmpty.norec { text-align:center; padding-top:8px; }
@@ -359,3 +359,8 @@ header .langwrap #langSel { padding-left:30px; }
 .fadein > *:nth-child(4) { animation-delay:.12s; } .fadein > *:nth-child(n+5) { animation-delay:.16s; }
 @keyframes fadeup { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .sk::after, .fadein > * { animation:none; } }
+
+/* animated microphone (loading.svg) next to the file being processed */
+.phead { display:flex; align-items:center; gap:4px; }
+.pani { width:56px; height:56px; margin:-12px -6px -12px -14px; flex:none; }
+#progress.paused .pani { visibility:hidden; }

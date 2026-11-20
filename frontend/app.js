@@ -272,6 +272,7 @@ function watch(id, name) {
     }
     const paused = j.status === "paused";
     $("pPause").hidden = paused; $("pResume").hidden = !paused;
+    $("progress").classList.toggle("paused", paused); // the moving microphone rests while paused
     const secs = Math.round((Date.now() - t0) / 1000);
     const asrP = j.progress || 0, diaP = j.dprogress || 0;
     const active = j.stage === "transcribing" || j.stage === "diarizing";
