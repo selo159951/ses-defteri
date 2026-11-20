@@ -149,8 +149,10 @@ def test_new_texts_exist_in_turkish_and_have_no_emoji():
 
 def test_app_icon_is_in_the_page_and_the_exe():
     html = _frontend("index.html")
-    assert html.count('src="icon.svg"') >= 4  # opening screen, header, about, empty list
-    assert (ROOT / "frontend" / "icon.svg").is_file() and (ROOT / "assets" / "icon.ico").is_file()
+    assert html.count('src="icon.svg"') >= 3  # header, about, empty list
+    assert html.count('src="loading.svg"') >= 2  # animated microphone: opening screen, progress box
+    assert (ROOT / "frontend" / "icon.svg").is_file() and (ROOT / "frontend" / "loading.svg").is_file()
+    assert (ROOT / "assets" / "icon.ico").is_file()
     assert 'icon="assets/icon.ico"' in (ROOT / "SesDefteri.spec").read_text("utf-8")
 
 
