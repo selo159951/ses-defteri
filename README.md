@@ -2,9 +2,24 @@
 
 Turns meeting recordings (40–80 min and longer) into an editable transcript with time ranges and speaker names. It is a **desktop app**: everything runs offline on the PC, no audio leaves the computer, and no network port is opened. The interface is in Turkish and English.
 
-> **TR:** Toplantı kayıtlarını konuşmacılarıyla birlikte düzenlenebilir metne dönüştüren masaüstü uygulaması. Tamamen çevrimdışı çalışır. `SesDefteri.zip`'i açıp `SesDefteri.exe`'ye çift tıklayın.
+> **TR:** Toplantı kayıtlarını konuşmacılarıyla birlikte düzenlenebilir metne dönüştüren masaüstü uygulaması. Tamamen çevrimdışı çalışır. [Son sürümden](https://github.com/selo159951/ses-defteri/releases/latest) `SesDefteri-Setup.exe`'yi (NVIDIA ekran kartı varsa `SesDefteri-NVIDIA-Setup.exe`) indirip kurun. Kaldırmak için: Başlat menüsü → *Ses Defteri* → *Ses Defteri uygulamasını kaldır* (kayıtlarınız silinmez).
 >
 > **Toplantı modu:** Metinden özet, konular, kararlar, görevler ve açık sorular çıkarılır; konuşmacı başına katkı ve toplantı puanı gösterilir. Tamamen çevrimdışı çalışır (llama.cpp; Vulkan destekli ekran kartı veya CPU), model Sistem sayfasından bir kez indirilir.
+
+## Install
+Download from the [latest release](https://github.com/selo159951/ses-defteri/releases/latest):
+
+| File | For |
+|---|---|
+| `SesDefteri-Setup.exe` | any Windows 10/11 PC (CPU, plus AMD/Intel/NVIDIA graphics cards through Vulkan) |
+| `SesDefteri-NVIDIA-Setup.exe` | PCs with an NVIDIA card: adds CUDA, fastest there |
+| `SesDefteri.zip` | the standard version without installing: unzip, run `SesDefteri.exe` |
+
+The installer needs no admin rights. It installs for the current user under `%LOCALAPPDATA%\Programs\Ses Defteri` and adds **Ses Defteri** to the Start menu and the desktop. The standard and NVIDIA installers are the same app: installing one replaces the other.
+
+**Uninstall:** Start menu → *Ses Defteri* → *Ses Defteri uygulamasını kaldır*, or Windows Settings → Apps → *Ses Defteri*. Recordings, saved voices and models in `%APPDATA%\SesDefteri` are kept; delete that folder to remove them too.
+
+The package is not signed, so Windows SmartScreen may warn: *More info* → *Run anyway*.
 
 ## Features
 - Drag & drop any audio/video file (mp3, wav, m4a, mp4, ogg…); progress with remaining-time estimate
@@ -15,15 +30,19 @@ Turns meeting recordings (40–80 min and longer) into an editable transcript wi
 - Speaker names also guessed from "ben Selim", "benim adım…", "my name is…", "Umut sen…"
 - Click a time range to replay it, fix text in place (autosaved), select part of a line → "Who said this?"
 - Add / remove / rename / merge speakers and lines, Undo (Ctrl+Z), search, replace, filters
-- **Search by meaning** across all recordings ("when did we talk about the price rise" finds "zam", "ücretleri yükseltmek"): a small local language model (~130 MB, downloaded once from the home search box or the System page) indexes the recordings in the background while no transcription runs; keyword hits are ranked first
+- **Search by meaning** across all recordings ("when did we talk about the price rise" finds "zam", "ücretleri yükseltmek"): a small local language model (~295 MB, downloaded once from the home search box or the System page) indexes the recordings in the background while no transcription runs; keyword hits are ranked first
 - **System page**: graphics card, video memory, CPU, RAM, whether the PC is suitable, speed test ("1 min of audio ≈ X s"), engine and model choice
-- Export **Original**, **Edited** or **Both** as Word / TXT / Markdown / SRT / JSON
+- Export **Original**, **Edited** or **Both** as Word / TXT / Markdown / SRT / JSON; one-click **Save as Word**; export **only one person's lines**
+- **Chapters**: long meetings are split into titled sections; click one to jump there
+- **Noise cleanup** (offline): for a noisy recording, listen to a short excerpt original vs cleaned and pick one; the app learns the noise limit from the choices
+- **Folder watch** (optional): new recordings in a chosen folder are processed by themselves
+- Pause / resume / cancel, several files in a queue, a first-run guided tour (**Guide** button to replay it)
 - Export the **Analysis** as Word / TXT / Markdown / JSON
 
 ## Meeting mode (local AI analysis)
 After the transcript is ready (or on demand from the **Analysis** tab), the app reads the meeting on the PC and produces:
 - a short **summary** and the **topics** discussed, with their time ranges
-- **decisions**, **tasks** (with owner and due date where the meeting says so) and **open questions**
+- **decisions**, **tasks** (with owner and due date where the meeting says so) and **open questions**, each with a clickable time stamp of where it was said (or *source not found*)
 - **per-person contribution**: talk time, turns, words and questions, what each person contributed and what they took away
 - a **meeting score** (overall plus decisions, focus, repetition and balance) with short tips
 
@@ -36,7 +55,7 @@ Small models make mistakes: the summary and every listed item are a best guess, 
 ## Graphics cards
 | Card | Engine | Notes |
 |---|---|---|
-| NVIDIA | CUDA (faster-whisper) in `SesDefteri-NVIDIA.zip`, Vulkan in `SesDefteri.zip` | tested |
+| NVIDIA | CUDA (faster-whisper) in the NVIDIA version, Vulkan in the standard version | tested |
 | AMD Radeon RX, Intel Arc A/B | Vulkan (whisper.cpp) | built for it; **not tested on a real AMD/Intel card yet** |
 | Onboard graphics (Intel Iris/UHD, AMD Radeon Graphics) | CPU by default | usually slower than the CPU; Vulkan can be chosen by hand |
 | none | CPU | works everywhere, slower |
@@ -58,10 +77,10 @@ Measured on a laptop with an RTX 1000 Ada (6 GB) and a 22-core Core Ultra 7, `la
 ```powershell
 .\tools\build_whispercpp.ps1   # once: builds whisper.cpp with Vulkan into vendor\whispercpp
 .\tools\build_llamacpp.ps1     # once: builds llama.cpp with Vulkan into vendor\llamacpp (meeting mode)
-.\build_windows.ps1            # dist\SesDefteri.zip    (CPU + Vulkan: any PC)
-.\build_windows.ps1 -Gpu       # also dist\SesDefteri-NVIDIA.zip (adds CUDA, fastest on NVIDIA)
+.\build_windows.ps1            # dist\SesDefteri.zip + dist\SesDefteri-Setup.exe (CPU + Vulkan: any PC)
+.\build_windows.ps1 -Gpu       # also the NVIDIA zip and setup (adds CUDA, fastest on NVIDIA)
 ```
-Unzip and double-click `SesDefteri.exe` (needs Microsoft Edge WebView2, built into Windows 10/11). The System page downloads the Whisper model on first start; after that everything works offline.
+The installers are made with Inno Setup 6 (`installer\SesDefteri.iss`) when it is installed. The app needs Microsoft Edge WebView2, built into Windows 10/11. The System page downloads the Whisper model on first start; after that everything works offline.
 
 ## Run (development)
 ```powershell
