@@ -104,7 +104,7 @@
     if (!rows) build();
     $p("psteps").hidden = false;
     const stage = j.stage, st = j.status;
-    const order = { queued: -1, converting: 0, loading_model: 1, transcribing: 2, diarizing: 3 };
+    const order = { queued: -1, converting: 0, cleaning: 0, awaiting_choice: 0, loading_model: 1, transcribing: 2, diarizing: 3 };
     const paused = st === "paused", failed = st === "error" || st === "interrupted", waiting = st === "queued";
     $p("progress").className = paused ? "paused" : failed ? "failed" : "";
     const dev = { cuda: "NVIDIA GPU", vulkan: "GPU", cpu: "işlemci" }[j.device];
@@ -118,7 +118,9 @@
     const partTxt = nParts > 1 ? `bölüm ${Math.min(j.part || 1, nParts)} / ${nParts}` : "";
     const stateOf = (i) => (waiting ? "waiting" : i < cur ? "done" : i === cur ? (paused ? "paused" : "now") : "waiting");
 
-    setState(0, stateOf(0), conv > 0 ? `%${pct(conv)}` : "Ses okunuyor, bu birkaç dakika sürebilir", conv > 0 ? conv : null);
+    const noiseTxt = stage === "awaiting_choice" ? "Gürültü temizleme için seçimin bekleniyor"
+      : stage === "cleaning" ? `Arka plan gürültüsü temizleniyor${j.clean_progress ? "  %" + pct(j.clean_progress) : ""}` : "";
+    setState(0, stateOf(0), noiseTxt || (conv > 0 ? `%${pct(conv)}` : "Ses okunuyor, bu birkaç dakika sürebilir"), noiseTxt ? (stage === "cleaning" ? j.clean_progress || null : null) : conv > 0 ? conv : null);
     setState(1, stateOf(1), j.stage_note === "selftest"
       ? "Bu bilgisayar için en hızlı ayar deneniyor. Bu sadece ilk seferde olur, yaklaşık 1 dakika sürer"
       : "İlk seferde 1-2 dakika sürebilir", null);

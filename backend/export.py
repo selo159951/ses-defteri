@@ -30,15 +30,21 @@ def _name(data: dict, spk: int, lang: str = "en") -> str:
     return f"{LABELS[lang]['speaker']} {m.group(1)}" if m else name
 
 
-def rows(data: dict, version: str, lang: str = "en") -> list[dict]:
-    """[{start, end, speaker(name), text}] for the chosen version, empty lines dropped."""
+def speaker_names(data: dict, speakers, lang: str = "en") -> list[str]:
+    return [_name(data, int(k), lang) for k in sorted({int(x) for x in speakers or []})]
+
+
+def rows(data: dict, version: str, lang: str = "en", speakers=None) -> list[dict]:
+    """[{start, end, speaker(name), text}] for the chosen version, empty lines dropped.
+    speakers = speaker numbers to keep (None / empty = everybody)."""
     if version == "original":
         src = data.get("original_segments") or data["segments"]  # older jobs have no snapshot
         items = [(s["start"], s["end"], s["speaker"], s["text_original"]) for s in src]
     else:
         items = [(s["start"], s["end"], s["speaker"], s["text_edited"]) for s in data["segments"]]
+    keep = {int(x) for x in speakers} if speakers else None
     return [{"start": a, "end": b, "speaker": _name(data, k, lang), "text": t.strip()}
-            for a, b, k, t in items if t and t.strip()]
+            for a, b, k, t in items if t and t.strip() and (keep is None or int(k) in keep)]
 
 
 ANALYSIS_LABELS = {
@@ -236,19 +242,22 @@ def render_analysis(job: dict, analysis: dict, fmt: str, lang: str = "en") -> st
     raise ValueError(f"unknown format {fmt}")
 
 
-def render(data: dict, version: str, fmt: str, lang: str = "en") -> str | bytes:
+def render(data: dict, version: str, fmt: str, lang: str = "en", speakers=None) -> str | bytes:
     lang = lang if lang in LABELS else "en"
     L = LABELS[lang]
-    segs = rows(data, version, lang)
+    segs = rows(data, version, lang, speakers)
+    only = ", ".join(speaker_names(data, speakers, lang)) if speakers else ""
     if fmt == "json":
-        return json.dumps({"filename": data["filename"], "language": data.get("language"),
-                           "version": version, "segments": segs}, ensure_ascii=False, indent=2)
+        head = {"filename": data["filename"], "language": data.get("language"), "version": version}
+        if only:
+            head["only_speakers"] = speaker_names(data, speakers, lang)
+        return json.dumps({**head, "segments": segs}, ensure_ascii=False, indent=2)
     if fmt == "srt":
         return "\n".join(
             f"{i}\n{ts(s['start'], True)} --> {ts(s['end'], True)}\n{s['speaker']}: {s['text']}\n"
             for i, s in enumerate(segs, 1))
     if fmt == "md":
-        lines = [f"# {data['filename']} ({version})", ""]
+        lines = [f"# {data['filename']} ({version})", ""] + ([f"*{only}*", ""] if only else [])
         for s in segs:
             lines += [f"**{s['speaker']}** `[{ts(s['start'])} – {ts(s['end'])}]`  ", s["text"], ""]
         return "\n".join(lines)
@@ -261,7 +270,7 @@ def render(data: dict, version: str, fmt: str, lang: str = "en") -> str | bytes:
 
         doc = Document()
         doc.add_heading(f"{data['filename']}", level=1)
-        doc.add_paragraph(f"{L[version]} · {len(segs)} {L['lines']}").runs[0].italic = True
+        doc.add_paragraph(f"{L[version]} · {len(segs)} {L['lines']}" + (f" · {only}" if only else "")).runs[0].italic = True
         for s in segs:
             p = doc.add_paragraph()
             r = p.add_run(f"{s['speaker']}  ")

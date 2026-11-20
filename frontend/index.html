@@ -10,6 +10,7 @@
 <body>
 <div id="splash" role="status" aria-live="polite">
   <div class="sbox">
+    <img class="slogoimg" src="icon.svg" alt="" width="84" height="84">
     <div class="slogo">Ses Defteri</div>
     <div class="stag"></div>
     <div class="sbar"><div class="sfill"></div></div>
@@ -18,7 +19,7 @@
 </div>
 <script src="splash.js"></script>
 <script src="icons.js"></script>
-<header><h1 data-i18n="app">Ses Defteri</h1><button id="homeBtn" hidden data-icon="arrow-left" data-i18n="all_recordings"></button>
+<header><img class="hicon" src="icon.svg" alt="" width="32" height="32"><h1 data-i18n="app">Ses Defteri</h1><button id="homeBtn" hidden data-icon="arrow-left" data-i18n="all_recordings"></button>
   <span class="spacer"></span>
   <button id="tourBtn" type="button">Nasıl kullanılır?</button>
   <button id="peopleBtn" data-i18n="people"></button>
@@ -31,6 +32,26 @@
   <div id="drop" tabindex="0">
     <p class="big" data-i18n="drop"></p>
     <p><span data-i18n="or"></span> <a href="#" id="browseBtn" class="link" data-i18n="browse"></a></p>
+    <details id="optsBox" class="opts">
+      <summary><span data-icon="settings" data-i18n="options"></span><span id="optsSum" class="hint"></span></summary>
+      <div class="optsbody" role="dialog" aria-modal="true" aria-labelledby="optsTitle">
+        <div class="optshead"><strong id="optsTitle" data-i18n="options"></strong>
+          <button id="optsClose" type="button" class="small" data-icon="x" data-i18n="close"></button></div>
+        <div class="optsrow">
+          <div class="optstitle" data-i18n="denoise_label"></div>
+          <select id="denoiseMode"><option value="auto" data-i18n="dn_auto"></option><option value="always" data-i18n="dn_always"></option><option value="off" data-i18n="dn_off"></option></select>
+          <p class="optshint" data-i18n="denoise_hint"></p>
+          <label class="optscheck"><input type="checkbox" id="denoiseAsk"> <span data-i18n="dn_ask"></span></label>
+          <div class="optsline"><span id="dnThr" class="optshint"></span>
+            <button id="dnReset" type="button" class="small" data-icon="refresh" data-i18n="dn_reset"></button></div>
+        </div>
+        <div class="optsrow" id="watchBox">
+          <div class="optstitle" data-i18n="watch_title"></div>
+          <label class="optscheck"><input type="checkbox" id="watchOn"> <span data-i18n="watch_on"></span></label>
+          <p class="optshint" data-i18n="watch_hint"></p>
+          <div class="optsline"><button id="watchPick" type="button" class="small" data-icon="folder" data-i18n="watch_choose"></button>
+            <span id="watchDir" class="optshint"></span></div>
+        </div>
     <label class="toggle meetmode"><input type="checkbox" id="meetingMode"><span class="knob"></span><span data-i18n="meeting_mode"></span></label>
     <p class="hint meetmodehint" data-i18n="meeting_mode_hint"></p>
     <label class="toggle meetmode"><input type="checkbox" id="learnPeople"><span class="knob"></span><span data-i18n="learn_people"></span></label>
@@ -38,7 +59,10 @@
     <label class="langmode"><span data-i18n="rec_language"></span>
       <select id="langMode"><option value="auto" data-i18n="rl_auto"></option><option value="mixed" data-i18n="rl_mixed"></option>
         <option value="tr" data-i18n="rl_tr"></option><option value="en" data-i18n="rl_en"></option></select></label>
+      </div>
+    </details>
   </div>
+  <div id="watchInd" class="watchind" hidden><span data-icon="eye"></span><span id="watchIndText"></span></div>
   <div id="pnote" role="alert" hidden></div>
   <section id="progress" hidden>
     <div id="pname"></div>
@@ -67,6 +91,7 @@
     </div>
   </div>
   <ul id="jobs"></ul>
+  <div id="jobsEmptyBox" class="emptybox" hidden><img src="icon.svg" alt="" width="120" height="120"></div>
   <p id="jobsEmpty" class="hint" hidden></p>
   <p class="credits" id="creditsLine"></p>
 </main>
@@ -97,12 +122,15 @@
     <span class="spacer"></span>
     <button id="undoBtn" class="icon" disabled data-icon="undo" data-i18n-title="undo_title"></button>
     <button id="helpBtn" class="icon" data-icon="keyboard" data-i18n-title="shortcuts_title"></button>
-    <details class="menu"><summary data-i18n="export"></summary>
+    <button id="wordBtn" type="button" class="wordbtn" data-icon="file-text" data-i18n="save_word" data-i18n-title="save_word_title"></button>
+    <details class="menu" id="expMenu"><summary data-i18n="export"></summary>
       <div>
         <label><span data-i18n="version"></span>
           <select id="expVersion"><option value="edited" data-i18n="edited"></option><option value="original" data-i18n="original"></option><option value="both" data-i18n="both"></option><option value="analysis" data-i18n="export_analysis"></option></select></label>
         <label><span data-i18n="format"></span>
           <select id="expFmt"><option value="docx">Word (.docx)</option><option value="txt">TXT</option><option value="md">Markdown</option><option value="srt" data-i18n="srt"></option><option value="json">JSON</option></select></label>
+        <div id="expWho"><div class="menulabel" data-i18n="only_who"></div><div id="expWhoList"></div>
+          <div class="hint" data-i18n="only_who_hint"></div></div>
         <div id="expAnalysisHint" class="hint" data-i18n="export_analysis_hint" hidden></div>
         <button id="expGo" data-i18n="save_as"></button>
       </div>
@@ -175,7 +203,25 @@
   <form method="dialog"><button data-i18n="close"></button></form>
 </dialog>
 
+<dialog id="abDlg">
+  <h3 data-i18n="ab_title"></h3>
+  <p class="hint" id="abDesc"></p>
+  <div class="abrow">
+    <button id="abPlayO" type="button" class="abplay" data-icon="play" data-i18n="ab_orig"></button>
+    <button id="abPlayC" type="button" class="abplay" data-icon="play" data-i18n="ab_clean"></button>
+  </div>
+  <p class="hint" id="abInfo"></p>
+  <label class="abdont"><input type="checkbox" id="abDont"> <span data-i18n="ab_dont"></span></label>
+  <p class="hint" id="abTimer"></p>
+  <div class="abchoose">
+    <button id="abUseC" type="button" class="primary" data-icon="check" data-i18n="ab_use_clean"></button>
+    <button id="abUseO" type="button" data-icon="check" data-i18n="ab_use_orig"></button>
+  </div>
+  <audio id="abAudO" preload="auto"></audio><audio id="abAudC" preload="auto"></audio>
+</dialog>
+
 <dialog id="aboutDlg">
+  <img class="abouticon" src="icon.svg" alt="" width="64" height="64">
   <h3 data-i18n="app"></h3>
   <p class="hint" data-i18n="about_desc"></p>
   <table class="creditTable">

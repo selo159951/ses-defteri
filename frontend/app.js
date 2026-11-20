@@ -49,6 +49,7 @@ async function loadJobs() {
   list.sort(sorters[$("jSort").value]);
   $("jobCount").textContent = list.length ? `(${list.length})` : "";
   $("jobsEmpty").hidden = !!list.length;
+  $("jobsEmptyBox").hidden = !!list.length;
   $("jobsEmpty").textContent = q || st || lang ? t("no_match_rec") : t("no_rec");
   $("jobs").replaceChildren(...list.map((j) => jobRow(j, q)));
 }
@@ -168,6 +169,57 @@ function renderQueue(q) {
   box.replaceChildren(...parts);
 }
 
+/* Noise-cleanup question (A/B popup): the running recording waits for "use cleaned" / "use original".
+   Both play buttons play the same short excerpt; only one plays at a time. */
+let askKey = null, askTimer = null;
+function abStop() {
+  [$("abAudO"), $("abAudC")].forEach((a) => a.pause());
+  [["abPlayO", "abAudO"], ["abPlayC", "abAudC"]].forEach(([b]) => { $(b).classList.remove("on"); $(b).dataset.icon = "play"; });
+  hydrateIcons($("abDlg"));
+}
+function abPlay(btn, aud) {
+  const a = $(aud);
+  if (!a.paused) return abStop();
+  abStop();
+  a.currentTime = 0; a.play().catch(() => {});
+  $(btn).classList.add("on"); $(btn).dataset.icon = "pause"; hydrateIcons($("abDlg"));
+  a.onended = abStop;
+}
+$("abPlayO").onclick = () => abPlay("abPlayO", "abAudO");
+$("abPlayC").onclick = () => abPlay("abPlayC", "abAudC");
+$("abDlg").addEventListener("cancel", (e) => e.preventDefault()); // Esc does not dismiss: a choice is needed (or the timeout decides)
+async function abAnswer(cleaned) {
+  const id = askKey?.split("|")[0];
+  abStop();
+  try { await call("answer_noise", id, cleaned, $("abDont").checked); } catch (e) { /* the poll closes the popup */ }
+  closeAsk();
+  try { lastSettings = await call("get_settings"); renderDenoise(); optsSum(); } catch (e) { /* shown next time */ }
+}
+$("abUseC").onclick = () => abAnswer(true);
+$("abUseO").onclick = () => abAnswer(false);
+function closeAsk() {
+  clearInterval(askTimer); askTimer = null; askKey = null;
+  abStop();
+  if ($("abDlg").open) $("abDlg").close();
+}
+function showAsk(ask) {
+  if (!ask) { if (askKey) closeAsk(); return; }
+  const key = ask.id + "|" + ask.deadline;
+  if (key === askKey) return;
+  closeAsk(); askKey = key;
+  const src = (f) => `${MEDIA}/${ask.id}/${f}?v=${Math.round(ask.deadline)}`;
+  $("abAudO").src = src(ask.original); $("abAudC").src = src(ask.cleaned);
+  $("abDont").checked = false;
+  $("abDesc").textContent = t("ab_desc", { name: ask.filename, s: 12 });
+  $("abInfo").textContent = t("ab_info", { snr: ask.snr, thr: ask.threshold });
+  const tick = () => {
+    const s = Math.max(0, Math.round(ask.deadline - Date.now() / 1000));
+    $("abTimer").textContent = t("ab_timer", { s, choice: t(ask.auto ? "ab_choice_clean" : "ab_choice_orig") });
+  };
+  tick(); askTimer = setInterval(tick, 1000);
+  if (!$("abDlg").open) $("abDlg").showModal();
+}
+
 /* keeps the queue line and the list fresh, and gives the box back to the running recording
    (for instance after the one in the box was cancelled) */
 async function pollQueue() {
@@ -176,8 +228,9 @@ async function pollQueue() {
   const sig = (q.running?.id || "") + "|" + (q.queued || []).map((x) => x.id).join(",");
   if (sig !== lastQueueSig) { lastQueueSig = sig; loadJobs(); }
   renderQueue(q);
+  showAsk(q.ask);
   if (!q.running && !(q.queued || []).length && watching === null) batch = 0;
-  if (watching === null && q.running) watch(q.running.id, q.running.filename);
+  if (watching === null && q.running && !$("home").hidden) watch(q.running.id, q.running.filename);
 }
 setInterval(pollQueue, 1500);
 
@@ -220,7 +273,7 @@ async function finished(id) {
   const n = batch;
   batch = 0; watching = null; watchState = "";
   $("progress").hidden = true; $("pqueue").hidden = true;
-  if (n <= 1) openJob(id); // one file in this round: show it as before
+  if (n === 1) openJob(id); // one file added by hand in this round: show it as before (folder-watch files stay quiet)
 }
 
 /* ================= transcript state ================= */
@@ -323,6 +376,11 @@ function renderSpeakers() {
       del.onclick = async () => { await checkpoint(); delete spkNames[i]; commit(t("speaker_removed")); };
       menu.append(del);
     }
+    if (mine.length) {  // the only item of this menu in the simple edition (the others are hidden by simple.css)
+      const only = el("button", { className: "small onlyexp" }, icText("file-text", t("only_export")));
+      only.onclick = () => { more.open = false; exportOnly(i); };
+      menu.append(only);
+    }
     window.peopleHooks?.speakerMenu(i, menu); // people.js: "Save to People"
     const more = el("details", { className: "menu spkmore" }, el("summary", { textContent: "⋯", title: t("speaker_menu") }), menu);
     const stats = el("span", { className: "stats", textContent: mine.length ? `${mmss(talk)} · ${Math.round((talk / total) * 100)}% · ${plural(mine.length, "line_1", "lines_n")}` : t("no_lines") });
@@ -340,6 +398,7 @@ function renderSpeakers() {
   const det = el("button", { className: "icon", title: t("detect_names") + " - " + t("detect_title") }, ic("user-search"));
   det.onclick = detectNames;
   box.append(el("div", { className: "spkbtns" }, add, det));
+  renderExportWho();
   const learned = (job.learned || []).filter((x) => x.action === "created" || x.action === "enriched");
   if (learned.length) {
     const names = learned.map((x) => x.name);
@@ -682,21 +741,48 @@ function updateExportOptions() {
   $("expAnalysisHint").hidden = ready;
   if (!ready && $("expVersion").value === "analysis") $("expVersion").value = "edited";
   const isAnalysis = $("expVersion").value === "analysis";
+  $("expWho").hidden = isAnalysis;
   const srt = $("expFmt").querySelector('option[value="srt"]');
   srt.disabled = isAnalysis;
   if (isAnalysis && $("expFmt").value === "srt") $("expFmt").value = "docx";
 }
 $("expVersion").onchange = updateExportOptions;
+
+/* "Only one person's words": tick speakers in the export menu (nobody ticked = everyone). */
+function renderExportWho() {
+  const box = $("expWhoList"), keep = new Set(selectedWho());
+  box.replaceChildren();
+  for (const i of spkIds()) {
+    if (!job.segments.some((s) => s.speaker === i)) continue;
+    const cb = el("input", { type: "checkbox", value: i, checked: keep.has(i) });
+    box.append(el("label", { className: "chk " + spkClass(i) }, cb, el("span", { textContent: spkLabel(i) })));
+  }
+}
+const selectedWho = () => [...$("expWhoList").querySelectorAll("input:checked")].map((c) => +c.value);
+function exportOnly(i) {
+  renderExportWho();
+  for (const c of $("expWhoList").querySelectorAll("input")) c.checked = +c.value === i;
+  $("expVersion").value = "edited"; updateExportOptions();
+  setTimeout(() => ($("expMenu").open = true), 0); // after the page-wide "click outside closes menus" handler
+  toast(t("only_export_set", { s: spkLabel(i) }));
+}
 $("expGo").onclick = async () => {
   await save();
   const v = $("expVersion").value, f = $("expFmt").value;
+  const who = v === "analysis" ? [] : selectedWho();
   $("expGo").closest("details").open = false;
-  const r = await call("save_export", job.id, v, f, LANG); // native "Save as" dialog
+  reportSaved(await call("save_export", job.id, v, f, LANG, who)); // native "Save as" dialog
+};
+$("wordBtn").onclick = async () => { // one click: edited transcript as .docx, only the Save dialog in between
+  await save();
+  try { reportSaved(await call("save_word", job.id, LANG)); } catch (e) { toast(t("export_failed") + (e?.message || e)); }
+};
+function reportSaved(r) {
   if (r.cancelled) return;
   if (r.error) return toast(t("export_failed") + r.error);
   const msg = r.paths.length === 1 ? t("saved_file", { p: r.paths[0] }) : t("saved_files", { n: r.paths.length, p: r.paths[0].replace(/[\\/][^\\/]+$/, "") });
   toast(msg, false, { label: t("show_folder"), run: () => call("reveal", r.paths[0]) });
-};
+}
 
 /* ================= GPU status (chip + System page live in system.js) ================= */
 function showGpu(st) {
@@ -712,7 +798,7 @@ function renderCredits() {
 function setLang(l, persist = true) {
   LANG = I18N[l] ? l : "en";
   $("langSel").value = LANG;
-  applyI18n(); renderCredits();
+  applyI18n(); renderCredits(); renderWatch(); renderDenoise(); optsSum();
   if (gpuState) showGpu(gpuState);
   if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
@@ -753,6 +839,64 @@ window.addEventListener("beforeunload", () => save());
 /* Meeting mode: transcription also starts the analysis in the background. */
 $("meetingMode").onchange = (e) => call("set_settings", { meeting_mode: e.target.checked }).catch(() => {});
 $("learnPeople").onchange = (e) => call("set_settings", { learn_people: e.target.checked }).catch(() => {});
+$("denoiseMode").onchange = (e) => call("set_settings", { denoise: e.target.value }).then((st) => { lastSettings = st; optsSum(); }).catch(() => {});
+$("denoiseAsk").onchange = (e) => call("set_settings", { denoise_ask: e.target.checked }).catch(() => {});
+let lastSettings = null;
+function renderDenoise() {
+  const st = lastSettings;
+  if (!st) return;
+  $("denoiseMode").value = st.denoise || "auto";
+  $("denoiseAsk").checked = st.denoise_ask !== false;
+  $("dnThr").textContent = st.denoise_answers
+    ? t("dn_thr", { v: st.denoise_threshold, n: st.denoise_answers }) : t("dn_thr_default", { v: st.denoise_threshold ?? 8 });
+  $("dnReset").disabled = !st.denoise_answers;
+}
+$("dnReset").onclick = async () => { try { lastSettings = await call("reset_denoise_threshold"); renderDenoise(); } catch (e) { /* ignore */ } };
+
+/* ================= folder watch (off by default) ================= */
+let watchSt = null;
+function renderWatch() {
+  const st = watchSt; if (!st) return;
+  $("watchOn").checked = st.enabled;
+  $("watchDir").textContent = st.dir || t("watch_none");
+  const ind = $("watchInd");
+  ind.hidden = !st.enabled;
+  optsSum();
+  if (!st.enabled) return;
+  ind.classList.toggle("warn", st.note === "missing");
+  const parts = [t("watch_active", { d: st.dir })];
+  if (st.note === "missing") parts.push(t("watch_missing"));
+  if (st.waiting) parts.push(t("watch_waiting", { n: st.waiting }));
+  if (st.queued) parts.push(t("watch_added", { n: st.queued, f: st.last_file }));
+  $("watchIndText").textContent = parts.join(" \u00b7 ");
+}
+async function refreshWatch() {
+  try { const st = await call("get_watch"); if (watchSt && st.queued !== watchSt.queued && !$("home").hidden) loadJobs(); watchSt = st; renderWatch(); } catch (e) { /* next time */ }
+}
+$("watchPick").onclick = async () => {
+  try { watchSt = await call("pick_watch_folder"); renderWatch(); } catch (e) { toast(t("watch_failed") + (e?.message || e)); }
+};
+$("watchOn").onchange = async (e) => {
+  try { watchSt = await call("set_watch", e.target.checked); }
+  catch (err) { e.target.checked = false; toast(t("watch_pick_first")); return; }
+  renderWatch();
+};
+setInterval(refreshWatch, 3000);
+
+/* "Seçenekler": the drop-area settings sit behind one button, shown as a centered popup (dark backdrop, close
+   button, Esc or a click outside closes it); next to the button a short line says which ones are on */
+function optsSum() {
+  const on = [];
+  if (lastSettings && lastSettings.denoise !== "off") on.push(t("opts_dn"));
+  if (watchSt?.enabled) on.push(t("opts_watch"));
+  $("optsSum").textContent = on.length ? t("opts_on", { list: on.join(", ") }) : "";
+}
+(() => {
+  const box = $("optsBox");
+  box.addEventListener("click", (e) => { if (e.target === box) box.open = false; });
+  $("optsClose").onclick = () => { box.open = false; };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && box.open) box.open = false; });
+})();
 $("langMode").onchange = (e) => call("set_settings", { language: e.target.value }).catch(() => {});
 
 window.splash?.step(70, "settings");
@@ -762,6 +906,8 @@ call("get_settings")
     $("meetingMode").checked = !!st.meeting_mode;
     $("learnPeople").checked = st.learn_people !== false;
     $("langMode").value = st.language || "auto";
+    lastSettings = st; renderDenoise();
+    refreshWatch();
     setLang(st.ui_lang || (navigator.language.startsWith("tr") ? "tr" : "en"), false);
   })
   .catch(() => setLang("tr", false))

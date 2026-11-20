@@ -5,7 +5,7 @@
 #peopleBtn, #sysBtn, #aboutBtn, #langSel,
 #home .meetmode, #home .meetmodehint, #home .langmode, #jStatus, #jLang,
 #undoBtn, #helpBtn, #jobTabs, #reviewBar, #repToggle, #repBox, #fMenu, #fSpk,
-#view .spkmore, #view .spkbtns, #view .learnedline, .seg .actions,
+#view .spkbtns, #view .learnedline, .seg .actions,
 .menu label:has(#expVersion), #expAnalysisHint, #creditsLine { display: none !important; }
 .badge.done, .badge.analysis { display: none; }
 ::highlight(lc-mid), ::highlight(lc-low) { background-color: transparent; }
@@ -147,3 +147,62 @@ header h1 { font-size: 24px; }
 @media (prefers-color-scheme: dark) { #firstrun.failed .fricon { background: #5a1f24; color: #f87171; } }
 @media (max-width: 520px) { #firstrun h2 { font-size: 24px; } #firstrun .frwhy { font-size: 18px; } #firstrun .frnums { font-size: 20px; } }
 body.frActive { overflow: hidden; }
+
+/* ---- app icon ---- */
+.slogoimg { display: block; width: 84px; height: 84px; margin: 0 auto 14px; }
+header .hicon { width: 32px; height: 32px; margin-right: 8px; flex: none; }
+header { align-items: center; }
+.abouticon { display: block; width: 64px; height: 64px; margin: 0 0 8px; }
+.emptybox { text-align: center; margin: 24px 0 4px; }
+.emptybox img { width: 120px; height: 120px; opacity: .18; }
+
+/* ---- Seçenekler popup (noise cleanup, folder watch) ---- */
+#drop .opts { margin: 18px auto 0; text-align: center; }
+#drop .opts > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; padding: 9px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 18px; }
+#drop .opts > summary::-webkit-details-marker { display: none; }
+#drop .opts > summary:hover { border-color: var(--accent); }
+#drop .opts > summary .hint { margin: 0; font-size: 15px; }
+#drop .opts > summary .ic { width: 20px; height: 20px; }
+#drop .opts[open]::before { content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; }
+#drop .opts[open] > .optsbody { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 61; width: min(640px, calc(100vw - 32px));
+  max-height: 85vh; overflow: auto; margin: 0; padding: 18px 24px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+  box-shadow: 0 12px 40px rgba(0,0,0,.3); text-align: left; font-size: 17px; }
+#drop .optshead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 22px; }
+#drop .optshead button { font-size: 16px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; }
+.optsrow { padding: 12px 0; border-top: 1px solid var(--line); }
+.optstitle { font-weight: 700; margin-bottom: 6px; }
+.optsrow select { font-size: 17px; padding: 7px 10px; max-width: 100%; }
+.optshint { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+.optscheck { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 17px; cursor: pointer; }
+.optscheck input { width: 20px; height: 20px; }
+.optsline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.optsline .optshint { margin: 0; }
+.optsline button { font-size: 16px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; }
+.watchind { margin: 12px 0 0; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 16px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.watchind[hidden] { display: none; }
+.watchind.warn { border-color: var(--hitcur); color: var(--fg); }
+.watchind .ic { width: 20px; height: 20px; flex: none; }
+
+/* ---- one-click Word, one person's lines ---- */
+.wordbtn { font-size: 18px; padding: 9px 18px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.wordbtn:hover { filter: brightness(1.08); }
+.wordbtn .ic { width: 20px; height: 20px; }
+.toolbar details.menu > summary { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+#expWho { display: flex; flex-direction: column; gap: 4px; } #expWho[hidden] { display: none; }
+#expWhoList { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow: auto; }
+#expWhoList label.chk { flex-direction: row; align-items: center; gap: 8px; font-size: 16px; }
+/* the speaker's "..." menu holds only "Sadece bunu dışa aktar" here */
+#view .spkmore .popmenu > :not(.onlyexp) { display: none !important; }
+#view .spkmore .popmenu .onlyexp { font-size: 16px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+/* ---- noise A/B popup ---- */
+#abDlg { max-width: 520px; font-size: 17px; }
+#abDlg h3 { font-size: 22px; }
+.abrow { display: flex; gap: 10px; margin: 8px 0 10px; }
+.abplay { flex: 1; padding: 12px; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.abplay.on { border-color: var(--accent); color: var(--accent); }
+.abplay .ic, .abchoose .ic { width: 18px; height: 18px; }
+.abdont { display: block; margin: 8px 0; font-size: 16px; }
+.abchoose { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+.abchoose button { font-size: 17px; padding: 10px 16px; display: inline-flex; align-items: center; gap: 8px; }
+.abchoose .primary { background: var(--accent); color: #fff; border-color: transparent; }

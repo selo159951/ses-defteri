@@ -102,3 +102,61 @@ def test_pipeline_does_not_import_removed_modules():
     src = (ROOT / "backend" / "pipeline.py").read_text("utf-8")
     for mod in ("glossary", "names", "people", "analysis"):
         assert not re.search(rf"^\s*(from\s+(backend\.|\.)?{mod}\b|import\s+(backend\.)?{mod}\b|from\s+(backend|\.)\s+import\s+[^\n]*\b{mod}\b)", src, re.M), mod
+
+
+# ---------------- ported features: options popup, Word button, one person's lines, icon, noise model ----------------
+def _frontend(name):
+    return (ROOT / "frontend" / name).read_text("utf-8")
+
+
+def test_every_id_used_by_app_js_exists_in_the_page():
+    html = _frontend("index.html")
+    ids = set(re.findall(r'\bid="([^"]+)"', html))
+    used = set(re.findall(r'\$\("([A-Za-z][\w-]*)"\)', _frontend("app.js")))
+    # ids made at run time are created by the scripts themselves
+    missing = {i for i in used - ids if i not in ("tourBtn",)}
+    assert not missing, missing
+
+
+def test_options_popup_holds_folder_watch_and_noise_settings():
+    html = _frontend("index.html")
+    box = html[html.index('id="optsBox"'):html.index('id="watchInd"')]
+    for el_id in ("optsClose", "denoiseMode", "denoiseAsk", "dnReset", "watchOn", "watchPick"):
+        assert f'id="{el_id}"' in box, el_id
+    assert 'id="optsSum"' in box
+    js = _frontend("app.js")
+    assert "Escape" in js and "e.target === box" in js  # Esc and a click on the backdrop close it
+    assert 'watchOn" checked' not in html  # folder watch is off until the user switches it on
+
+
+def test_word_button_and_one_person_export_are_wired():
+    html, js = _frontend("index.html"), _frontend("app.js")
+    assert 'id="wordBtn"' in html and 'id="expWhoList"' in html
+    assert 'call("save_word"' in js and "exportOnly" in js
+    css = _frontend("simple.css")
+    assert "#view .spkbtns" in css and "#view .spkmore," not in css  # the "..." menu is shown, with one item
+
+
+def test_new_texts_exist_in_turkish_and_have_no_emoji():
+    js = _frontend("simple.js")
+    tr = js[js.index("Object.assign(I18N.tr, {\n  options"):js.index("Object.assign(I18N.en, {\n  options")]
+    for key in ("options", "opts_on", "save_word", "only_export", "watch_on", "denoise_label", "ab_title", "dn_reset"):
+        assert re.search(rf"\b{key}:", tr), key
+    for name in ("simple.js", "simple.css", "index.html", "app.js", "simple-progress.js"):
+        text = _frontend(name)
+        assert not re.search("[\U0001F300-\U0001FAFF☀-➿]", text), name
+
+
+def test_app_icon_is_in_the_page_and_the_exe():
+    html = _frontend("index.html")
+    assert html.count('src="icon.svg"') >= 4  # opening screen, header, about, empty list
+    assert (ROOT / "frontend" / "icon.svg").is_file() and (ROOT / "assets" / "icon.ico").is_file()
+    assert 'icon="assets/icon.ico"' in (ROOT / "SesDefteri.spec").read_text("utf-8")
+
+
+def test_noise_model_ships_with_the_package_and_nothing_is_downloaded_for_it():
+    assert "gtcrn_simple.onnx" in (ROOT / "fetch_models.py").read_text("utf-8")
+    src = (ROOT / "backend" / "denoise.py").read_text("utf-8")
+    assert "urllib" not in src and "requests" not in src
+    spec = (ROOT / "SesDefteri.spec").read_text("utf-8")
+    assert 'for n in os.listdir("models")' in spec  # every file in models/ (including the denoiser) is bundled
