@@ -17,4 +17,11 @@ Copy-Item KULLANIM.txt $out  # the one-page guide next to the exe
 $zip = Join-Path $desk "SesDefteri-Basit.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Push-Location $desk; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
-Write-Host "Done: $out (open SesDefteri.exe) and $zip"
+# installer (Inno Setup 6): per-user, Start menu and desktop shortcut named "Ses Defteri"
+$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($iscc) {
+    & $iscc /Q /DSrc=..\dist\SesDefteri installer\SesDefteri.iss
+    Copy-Item -Force dist\SesDefteri-Basit-Setup.exe (Join-Path $desk "SesDefteri-Basit-Setup.exe")
+} else { Write-Warning "Inno Setup 6 not found: no Setup.exe (the folder and .zip are still built)" }
+Write-Host "Done: $out (open SesDefteri.exe), $zip and Desktop\SesDefteri-Basit-Setup.exe"

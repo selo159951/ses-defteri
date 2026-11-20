@@ -53,5 +53,5 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="SesDefteri",
-          console=False, icon="assets/icon.ico")
+          console=False, icon="assets/icon.ico", version="installer/version_info.txt")
 coll = COLLECT(exe, a.binaries, a.datas, name="SesDefteri")
