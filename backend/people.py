@@ -173,6 +173,7 @@ def _public(p: dict) -> dict:
             "samples": len(p["samples"]), "weak": bool(p.get("weak")), "has_voice": bool(p.get("embedding")),
             "auto": bool(p.get("auto")), "confirmed": bool(p.get("confirmed", not p.get("auto"))),
             "meetings": int(p.get("meetings", len(p["samples"]) and 1)),
+            "title": str(p.get("title") or ""), "note": str(p.get("note") or ""),
             "warnings": sorted({w for s in p["samples"] for w in s.get("warnings", [])})}
 
 
@@ -214,6 +215,16 @@ def rename_person(pid: str, name: str) -> dict:
     with _lock:
         p = _read(pid)
         p["name"] = name
+        _write(p)
+    return _public(p)
+
+
+def set_person_info(pid: str, title: str = "", note: str = "") -> dict:
+    """Optional title ("Proje yöneticisi") and a short note; the AI assistant knows people by these."""
+    with _lock:
+        p = _read(pid)
+        p["title"] = str(title or "").strip()[:80]
+        p["note"] = str(note or "").strip()[:300]
         _write(p)
     return _public(p)
 

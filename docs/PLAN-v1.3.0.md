@@ -250,6 +250,15 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
   - canlı işçinin gerideyken durması (sahte `transcribe` yavaşlatılarak)
 
 ## Aşama 4: AI sohbet (sadece Ana)
+**Durum (2026-11-22, Ana Sürüm):**
+- [x] Kişilere `title` / `note` (`people.set_person_info`), Kişiler kartında iki alan.
+- [x] `backend/chatdb.py`: `sohbet.db` (SQLite FTS5, Türkçe harfler katlanmış, basit Türkçe ek kesme `stem()`), satırlar + analiz maddeleri (özet/karar/görev/açık soru), `sync()` mtime ile, yalnız `done` işler.
+- [x] `backend/chat.py`: tarihler kodla (`resolve_dates`: bugün/bugünkü/dün/geçen hafta/bu ay/N gün önce/son N gün/12 kasım/tam tarih/"geçen salı", "salı günü"; tek başına "cuma" tarih sayılmaz). Soru türü (karar/görev/soru/özet/genel) ve dolgu kelimeleri de kodla; model yalnız niyet (kayıt/uygulama/konu dışı), kişiler, anahtar kelimeler ve cevap için. Uydurma kelimeler bir şey bulmazsa kişi/tarih filtresiyle o kişinin satırlarına düşer. Kaynak numaraları kodla doğrulanır, `**` ve sondaki "Kaynak:" temizlenir. Konu dışı → sabit ret. "Kim yaptı" → sabit künye (Selim Oğuz, Umut Akbaş).
+- [x] Köprü `chat_info`, `chat_ask`, `chat_cancel` (dosya işlenirken "busy", model yoksa "no_model", LLM'den önce `asr.release()`).
+- [x] Arayüz `frontend/chat.js`: üstte **Asistan** düğmesi, örnek sorular, balonlar, kaynak çipleri (tıklayınca kayıt o satırda açılır), Durdur, Yeni sohbet.
+- [x] `tests/test_chat.py` (55 test), toplam 484 test geçti.
+- [x] Gerçek modelle (Qwen 3.5 4B, NVIDIA) denendi: "Dün Mehmet ne demişti?", "Dünkü toplantıda hangi kararlar alındı?", "Bu uygulamayı kim yaptı?", şiir isteği (ret). Soru başına ~12 sn.
+- [ ] Gerçek, uzun kayıtlarla (birçok toplantı) cevap kalitesi kullanıcı tarafından denenmeli.
 **4a. Kişi bilgisi**
 - `person.json`'a isteğe bağlı `title` (unvan) ve `note` (açıklama) alanları eklenir.
 - `_public()`'e eklenir. `people.js` kişi kartında "Unvan / Açıklama" düzenleme alanı olur.

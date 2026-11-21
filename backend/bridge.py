@@ -388,6 +388,39 @@ class Api(SystemApi, LlmApi, SearchApi):
         meeting_recorder.discard(folder)
         return meeting_recorder.leftovers()
 
+    # ---------------- AI assistant (questions about the recordings) ----------------
+    def chat_info(self) -> dict:
+        from .analysis import llm_ready
+
+        return {"llm_ready": llm_ready()}
+
+    def chat_ask(self, question: str, history: list | None = None, lang: str = "tr") -> dict:
+        """Answer from the recordings with the local model (two model runs: read the question, then answer)."""
+        from . import chat, semantic
+        from .analysis import llm_ready
+
+        if not llm_ready():
+            return {"error": "no_model"}
+        if pipeline._current["id"]:  # the speech model is working: answering now would make both slow
+            return {"error": "busy"}
+        if not getattr(self, "_live", None):
+            asr.release()  # video memory for the language model (the next transcription reloads in seconds)
+        self._chat_cancel = threading.Event()
+        sem = chat.semantic_rows if semantic.ready() else None
+        try:
+            return chat.ask(question, history if isinstance(history, list) else [], lang, semantic=sem,
+                            cancel=self._chat_cancel)
+        except Exception as e:
+            if self._chat_cancel.is_set():
+                return {"cancelled": True}
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def chat_cancel(self) -> dict:
+        ev = getattr(self, "_chat_cancel", None)
+        if ev:
+            ev.set()
+        return {"ok": True}
+
     # ---------------- version and updates ----------------
     def get_app_info(self) -> dict:
         return {"version": version.VERSION, "edition": version.edition()}
@@ -674,6 +707,11 @@ class Api(SystemApi, LlmApi, SearchApi):
         from . import people
 
         return people.rename_person(person_id, name)
+
+    def set_person_info(self, person_id: str, title: str = "", note: str = "") -> dict:
+        from . import people
+
+        return people.set_person_info(person_id, title, note)
 
     def delete_person(self, person_id: str) -> dict:
         from . import people

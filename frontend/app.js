@@ -901,7 +901,7 @@ $("helpBtn").onclick = () => $("help").showModal();
 /* ================= pages ================= */
 /* System, People and Settings are full pages: opening one hides every other view (they used to stay open under
    each other). Pages listen for "pageopen" to tidy up (e.g. stop a voice recording) when another page opens. */
-const PAGES = ["system", "people", "settings"];
+const PAGES = ["system", "people", "settings", "assistant"];
 function showPage(id) {
   for (const p of ["home", "view", "player", ...PAGES]) { const e = $(p); if (e) e.hidden = p !== id; }
   $("homeBtn").hidden = false;

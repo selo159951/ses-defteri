@@ -62,8 +62,16 @@
         if (!confirm(t("confirm_delete_person", { n: p.name }))) return;
         await call("delete_person", p.id); refresh();
       };
+      // optional title and note: the AI assistant knows people by these
+      const title = el("input", { value: p.title || "", className: "ptitle", placeholder: t("person_title_ph"), maxLength: 80 });
+      const note = el("input", { value: p.note || "", className: "pnote", placeholder: t("person_note_ph"), maxLength: 300 });
+      title.onchange = note.onchange = async () => {
+        try { await call("set_person_info", p.id, title.value, note.value); toast(t("person_info_saved")); }
+        catch (e) { S.error = msg(e); draw(); }
+      };
       return el("div", { className: "pcard" },
         el("div", { className: "prow" }, name, el("span", { className: "pmeta", textContent: bits.join(" · ") }), ...tags),
+        el("div", { className: "prow pinfo" }, title, note),
         el("div", { className: "prow pbtns" }, el("span", { className: "pmeta", textContent: t("add_voice") + ":" }), addFile, addMic,
           ...(confirmBtn ? [confirmBtn] : []), el("span", { className: "spacer" }), del));
     });
