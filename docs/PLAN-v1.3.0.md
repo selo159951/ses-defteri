@@ -348,3 +348,18 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 - Her LLM çağrısı modeli yeniden yükler, sohbet yavaş olabilir. Gerekirse sonraki sürümde `llama-server` ile model açık tutulur, ama "yerel sunucu yok" ilkesi nedeniyle şimdilik yapılmıyor.
 - Güncelleme kontrolü programın tek internet çağrısı olur. README'de açıkça yazılır ve Ayarlar'dan kapatılabilir.
 - Self-signed imza SmartScreen uyarısını kaldırmaz. Kullanıcıya söylendi.
+
+---
+## DEVAM NOTU (2026-11-22, oturum sıkıştırılmadan önce)
+Kullanıcının isteği: "kalan aşamaları sırayla tamamla, sonra kapsamlı test yap, uyurken uyandırma, iş bitince PC'yi kapat". Token tasarrufu iste: kısa çalış.
+- Aşama 0–5 BİTTİ (Ana son commit 300f565, Basit d1bba14). Ana 484, Basit 380 test geçiyor.
+- Aşama 6 sürüyor:
+  1. [~] Ana derleme arka planda başladı: `build_windows.ps1 -Gpu`, günlük: scratchpad `build_main.log` (session 38abbbec). Bitince dist'te 4 dosya: SesDefteri-Setup.exe, SesDefteri.zip, SesDefteri-NVIDIA-Setup.exe, SesDefteri-NVIDIA.zip. İmzalı olmalı (`Get-AuthenticodeSignature`, parmak izi 8032931C…).
+  2. [ ] Paket kontrolü: dist\SesDefteri\SesDefteri.exe'de `soundcard` var mı (`_internal\soundcard`), uygulama açılıyor mu.
+  3. [ ] Basit derle: `..\Basit Sürüm\build_windows.ps1` → Projeler\Ses Defteri\Basit Sürüm.
+  4. [ ] README (Ana) güncelle: kayıt + canlı yazı, Asistan, Ayarlar/tutanak, güncelleme (tek internet kullanımı, kapatılabilir), imza notu. Sürüm notları `.claude/release-notes-1.3.0.md` (Türkçe, gerçek kayıt adı yok).
+  5. [ ] Bu PC'ye NVIDIA 1.3.0 sessiz kur (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=desktopicon`), açılıyor mu, 26 kayıt duruyor mu, Hakkında "1.3.0 · NVIDIA".
+  6. [ ] Güncelleme turu testi: yerel `python -m http.server` + `SESDEFTERI_UPDATE_URL` ile kurulu uygulamada gerçek setup'la "Kur ve yeniden başlat" (veri korunuyor mu).
+  7. [ ] GitHub: commit+push, `gh release create v1.3.0 --draft`, dosyalar `bash tools/dev/upload.sh v1.3.0 <dosyalar>` (Basit setup da), boyutları kontrol, `--draft=false --latest`.
+  8. [ ] `tools/make_release_json.py` → site/ses-defteri/surum.json; kullanıcıya "site/ses-defteri klasörünü selimoguz.com.tr/ses-defteri/'ye yükle" notu (OKU.txt'ye de yaz).
+  9. [ ] Hafıza (ses-defteri-status.md) güncelle, sonra `shutdown /s /t 60` ile PC'yi kapat (kullanıcı istedi). Yüklemeler bitmeden kapatma.
