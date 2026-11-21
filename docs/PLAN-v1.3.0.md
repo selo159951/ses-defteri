@@ -311,6 +311,8 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 - uydurma kaynak numarası atılır
 
 ## Aşama 5: Basit Sürüm'e aktarma (`..\Basit Sürüm`)
+**Durum (2026-11-22):** [x] Basit commit d1bba14. Aktarma betiği: version/updater/minutes/meeting_recorder + updater.js/recorder.js/settings.js aynen kopyalandı; köprüde `LIVE_TEXT=False`, `SIMPLE=True` (tutanak = katılımcılar + tam metin, şablonsuz); `window.SIMPLE_EDITION` ile Ayarlar sade (kayıt, şirket, güncelleme). AppMutex `SesDefteriBasitMutex`, sessiz kurulum sonrası açılış, imza, `edition.txt=basit`. Derleme betiğindeki eski `System32<TAB>ar.exe` hatası düzeltildi. Basit 380 test, Ana 484 test geçti. Ayarlar sayfası kaynak koddan açılıp kontrol edildi.
+**NOT:** Basit'i kaynak koddan test ederken `SESDEFTERI_MODEL_DIR` boş klasöre işaret ederse 2,2 GB model indirmeye başlıyor; testte uygulamayı hemen kapat ya da modelli klasör ver.
 - [ ] `version.py` (`edition=basit`), updater, AppMutex, `[Run]` sessiz sonrası açılış, imza
 - [ ] Sade Ayarlar: şirket adı, logo, güncelleme aç/kapa (tutanak bölümleri ve şablon yüklemesi de olabilir, basit tutulur)
 - [ ] Kaydet düğmesi (canlı yazı yok)

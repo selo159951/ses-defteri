@@ -260,6 +260,7 @@ class Api(SystemApi, LlmApi, SearchApi):
 
     # ---------------- meeting recording (computer sound + microphone) ----------------
     LIVE_TEXT = True  # the simple edition has no live text
+    SIMPLE = False    # the simple edition: short minutes without analysis
 
     def _rec_settings(self) -> dict:
         s = asr.get_settings()
@@ -594,7 +595,11 @@ class Api(SystemApi, LlmApi, SearchApi):
         target = Path(chosen)
         if target.suffix.lower() != ".docx":
             target = target.with_name(target.name + ".docx")
-        _write(target, minutes.build(data, analysis, lang))
+        if self.SIMPLE:  # no analysis in the simple edition: who was there and what was said
+            _write(target, minutes.build(data, None, lang, use_template=False, note_missing=False,
+                                         sections=["participants", "transcript"]))
+        else:
+            _write(target, minutes.build(data, analysis, lang))
         self._remember_dir("export_dir", str(target.parent))
         return {"paths": [str(target)], "analysis": analysis is not None}
 

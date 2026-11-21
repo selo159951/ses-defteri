@@ -457,9 +457,12 @@ def fill_template(data: bytes, ctx: dict) -> bytes:
 
 # ---------------------------------------------------------------- entry point
 def build(job: dict, analysis: dict | None, lang: str = "tr", use_template: bool = True,
-          note_missing: bool = True) -> bytes:
+          note_missing: bool = True, sections: list[str] | None = None) -> bytes:
+    """sections overrides the Settings choice (the simple edition: participants + transcript, it has no analysis)."""
     lang = lang if lang in LABELS else "tr"
     cfg = config()
+    if sections is not None:
+        cfg["sections"] = clean_sections(sections)
     ctx = context(job, analysis, lang, cfg["company_name"])
     if use_template and template_path().exists():
         return fill_template(template_path().read_bytes(), ctx)

@@ -58,7 +58,7 @@
     try {
       const r = await call("save_minutes", job.id, LANG);
       reportSaved(r);
-      if (r.paths && !r.analysis) setTimeout(() => toast(t("minutes_no_analysis"), false,
+      if (r.paths && !r.analysis && !window.SIMPLE_EDITION) setTimeout(() => toast(t("minutes_no_analysis"), false,
         { label: t("show_folder"), run: () => call("reveal", r.paths[0]) }), 3600);
     } catch (e) { toast(t("export_failed") + msg(e)); }
   };
@@ -198,7 +198,10 @@
   }
 
   function draw() {
-    root.replaceChildren(el("h2", { textContent: t("set_title") }), recordCard(), companyCard(), minutesCard(), templateCard(), updateCard());
+    // the simple edition keeps it short: recording, company name / logo, updates
+    const cards = window.SIMPLE_EDITION ? [recordCard(), companyCard(), updateCard()]
+      : [recordCard(), companyCard(), minutesCard(), templateCard(), updateCard()];
+    root.replaceChildren(el("h2", { textContent: t("set_title") }), ...cards);
     hydrateIcons(root);
   }
 })();
