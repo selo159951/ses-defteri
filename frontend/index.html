@@ -24,6 +24,7 @@
   <span class="spacer"></span>
   <button id="guideBtn" data-icon="book-open" data-i18n="guide"></button>
   <button id="peopleBtn" data-icon="users" data-i18n="people"></button>
+  <button id="settingsBtn" data-icon="sliders" data-i18n="settings"></button>
   <span class="langwrap"><span class="langic" data-icon="globe" aria-hidden="true"></span><select id="langSel" data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select></span>
   <button id="aboutBtn" class="icon" data-icon="info" data-i18n-title="about_title"></button>
   <button id="sysBtn" data-icon="cpu" data-i18n="system">Sistem</button>
@@ -100,6 +101,7 @@
 
 <main id="system" hidden></main>
 <main id="people" hidden></main>
+<main id="settings" hidden></main>
 
 <main id="view" hidden>
   <div class="toolbar">
@@ -108,6 +110,7 @@
     <button id="undoBtn" class="icon" disabled data-icon="undo" data-i18n-title="undo_title"></button>
     <button id="helpBtn" class="icon" data-icon="keyboard" data-i18n-title="shortcuts_title"></button>
     <button id="wordBtn" class="primary wordbtn" data-icon="file-text" data-i18n="save_word" data-i18n-title="save_word_title"></button>
+    <button id="minutesBtn" class="wordbtn" data-icon="clipboard-list" data-i18n="minutes_btn" data-i18n-title="minutes_btn_title"></button>
     <details class="menu" id="expMenu"><summary data-i18n="export"></summary>
       <div>
         <label><span data-i18n="version"></span>
@@ -225,5 +228,6 @@
 <script src="analysis.js"></script>
 <script src="tour.js"></script>
 <script src="updater.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

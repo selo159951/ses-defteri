@@ -316,6 +316,7 @@ async function finished(id) {
 async function openJob(id) {
   // switch pages at once and show placeholder lines; the recording (can be long) loads behind them
   $("home").hidden = true; $("view").hidden = false; $("player").hidden = false; $("homeBtn").hidden = false;
+  for (const p of PAGES) $(p).hidden = true; // e.g. a search result opened while a page was showing
   $("title").textContent = ""; $("speakers").replaceChildren(); skeleton($("segs"), "lines");
   let j;
   try { j = await call("get_job", id); }
@@ -896,6 +897,16 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Escape") $("selPop").hidden = true;
 });
 $("helpBtn").onclick = () => $("help").showModal();
+
+/* ================= pages ================= */
+/* System, People and Settings are full pages: opening one hides every other view (they used to stay open under
+   each other). Pages listen for "pageopen" to tidy up (e.g. stop a voice recording) when another page opens. */
+const PAGES = ["system", "people", "settings"];
+function showPage(id) {
+  for (const p of ["home", "view", "player", ...PAGES]) { const e = $(p); if (e) e.hidden = p !== id; }
+  $("homeBtn").hidden = false;
+  window.dispatchEvent(new CustomEvent("pageopen", { detail: id }));
+}
 
 /* ================= wiring ================= */
 $("homeBtn").onclick = async () => { await save(); audio.pause(); $("view").hidden = true; $("player").hidden = true; $("home").hidden = false; $("homeBtn").hidden = true; job = null; loadJobs(); };

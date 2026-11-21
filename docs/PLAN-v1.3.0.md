@@ -143,6 +143,15 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
   - internet yok → sessiz
 
 ## Aşama 2: Ayarlar sayfası + toplantı tutanağı
+**Durum (2026-11-21, Ana Sürüm):**
+- [x] Ayarlar sayfası (`frontend/settings.js`): Şirket (ad, renk, logo), Tutanak bölümleri (aç/kapa + sıra), Kendi Word şablonu (yükle / örnek indir / kaldır), Güncellemeler (otomatik denetle + Şimdi denetle + sürüm). "Kayıt" bölümü Aşama 3'te eklenecek.
+- [x] Sayfa hatası giderildi: ortak `showPage()` + `pageopen` olayı (`app.js`); `openJob` de sayfaları gizler.
+- [x] `backend/minutes.py`: yerleşik tutanak + şablon doldurma (bölünmüş run, liste paragrafı, görev tablo satırı, üst/alt bilgi, `{logo}`, Türkçe/ASCII adlar). Örnek şablon dosya olarak tutulmuyor, `minutes.sample_template()` ile anında üretiliyor ("Örnek şablonu indir").
+- [x] Köprü: `get/set_minutes_settings`, `pick_logo`, `remove_logo`, `pick_template`, `remove_template`, `save_sample_template`, `save_minutes`. Kayıt sayfasında "Tutanak" düğmesi.
+- [x] `tests/test_minutes.py` (22 test), toplam 416 test geçti. Uygulamada sahte kayıtla denendi (ekran görüntüleriyle).
+- [ ] Analiz sekmesine de "Tutanak" düğmesi (isteğe bağlı, kayıt sayfasındaki düğme yeterli olabilir).
+- [ ] Basit Sürüm'e aktarma → Aşama 5.
+
 **2a. Ayarlar sayfası** (`frontend/settings.js`, header'a `settingsBtn`)
 - Mevcut "Seçenekler" dişlisiyle karışmasın diye ikon `sliders`. Lucide yolu `icons.js`'e eklenir.
 - **Bölümler:**

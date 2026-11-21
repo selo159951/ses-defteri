@@ -19,8 +19,7 @@
   async function open() {
     if (job) await save();
     audio.pause();
-    for (const id of ["home", "view", "player"]) $(id).hidden = true;
-    root.hidden = false; $("homeBtn").hidden = false;
+    showPage("people");
     S.error = "";
     const first = !root.firstChild; // first open: placeholder rows while the saved voices load
     if (first) skeleton(root, "people");
@@ -30,6 +29,7 @@
   function close() { root.hidden = true; if (S.rec) cancelRec(); S.adding = false; }
   $("peopleBtn").onclick = open;
   $("homeBtn").addEventListener("click", close);
+  window.addEventListener("pageopen", (e) => { if (e.detail !== "people" && !root.hidden) close(); });
   $("langSel").addEventListener("change", () => { if (!root.hidden) draw(); });
 
   function draw() {

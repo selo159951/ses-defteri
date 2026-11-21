@@ -374,3 +374,22 @@ header .langwrap #langSel { padding-left:30px; }
 .updbar .updbarfill { flex:0 0 200px; margin:0; }
 .updbar .updfill { height:100%; background:var(--accent); transition:width .4s; }
 .updbar .updnotes { order:5; flex-basis:100%; }
+
+/* Settings page (settings.js) */
+#settings { max-width:860px; margin:0 auto; padding:16px 24px; display:flex; flex-direction:column; gap:14px; }
+#settings h2 { margin:0; }
+#settings .frow { display:grid; grid-template-columns:150px 1fr; align-items:center; gap:12px; padding:4px 0; }
+#settings .frow.check { display:flex; gap:8px; }
+#settings .frow input:not([type]) { max-width:420px; }
+#settings input[type=color] { width:56px; height:32px; padding:2px; }
+#settings .btnrow { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+#settings .logobox { min-height:40px; display:flex; align-items:center; }
+#settings .logobox img { max-height:64px; max-width:240px; border:1px solid var(--line); border-radius:6px; padding:4px; background:#fff; }
+#settings .seclist { list-style:none; margin:0; padding:0; }
+#settings .seclist li { display:flex; align-items:center; gap:6px; padding:5px 0; border-top:1px solid var(--line); }
+#settings .seclist li:first-child { border-top:0; }
+#settings .seclist li.off label { opacity:.6; }
+#settings .seclist .spacer { flex:1; }
+#settings .verdict { font-size:14px; font-weight:500; padding:10px 14px; }
+#settings .verdict.plain { background:var(--bg); border:1px solid var(--line); }
+@media (max-width:640px) { #settings .frow { grid-template-columns:1fr; gap:4px; } }

@@ -320,6 +320,116 @@ class Api(SystemApi, LlmApi, SearchApi):
         self._remember_dir("export_dir", str(target.parent))
         return {"paths": [str(target)]}
 
+    # ---------------- meeting minutes (Settings page + "Minutes" button) ----------------
+    def get_minutes_settings(self) -> dict:
+        from . import minutes
+
+        return {**minutes.config(), "logo_data": self._logo_data()}
+
+    def _logo_data(self) -> str:
+        import base64
+
+        from . import minutes
+
+        p = minutes.logo_path()
+        if not p:
+            return ""
+        mime = "image/png" if p.suffix == ".png" else "image/jpeg"
+        return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+
+    def set_minutes_settings(self, values: dict) -> dict:
+        from . import minutes
+
+        if "company_name" in values:
+            asr.set_setting("company_name", str(values["company_name"] or "").strip()[:120])
+        if "company_color" in values:
+            asr.set_setting("company_color", minutes.clean_color(values["company_color"]))
+        if "sections" in values:
+            asr.set_setting("minutes_sections", minutes.clean_sections(values["sections"]))
+        return self.get_minutes_settings()
+
+    def pick_logo(self) -> dict:
+        import webview
+
+        from . import minutes
+
+        f = _first(self._window().create_file_dialog(
+            webview.FileDialog.OPEN, file_types=("Picture (*.png;*.jpg;*.jpeg)",)))
+        if f:
+            minutes.set_logo(f)
+        return self.get_minutes_settings()
+
+    def remove_logo(self) -> dict:
+        from . import minutes
+
+        minutes.remove_logo()
+        return self.get_minutes_settings()
+
+    def pick_template(self) -> dict:
+        import webview
+
+        from . import minutes
+
+        f = _first(self._window().create_file_dialog(
+            webview.FileDialog.OPEN, directory=self._last_dir(), file_types=(EXPORT_TYPES["docx"],)))
+        if f:
+            minutes.set_template(f)
+        return self.get_minutes_settings()
+
+    def remove_template(self) -> dict:
+        from . import minutes
+
+        minutes.remove_template()
+        return self.get_minutes_settings()
+
+    def save_sample_template(self, lang: str = "tr") -> dict:
+        """A starter Word template with every placeholder, to edit in Word and load back."""
+        import webview
+
+        from . import minutes
+
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(),
+            save_filename="tutanak-sablonu.docx" if lang == "tr" else "minutes-template.docx",
+            file_types=(EXPORT_TYPES["docx"],)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".docx":
+            target = target.with_name(target.name + ".docx")
+        _write(target, minutes.sample_template(lang))
+        self._remember_dir("export_dir", str(target.parent))
+        return {"paths": [str(target)]}
+
+    def save_minutes(self, job_id: str, lang: str = "tr") -> dict:
+        """Meeting minutes as Word: the user's template when there is one, otherwise the built-in layout."""
+        import json
+
+        import webview
+
+        from . import minutes
+
+        data = _job(job_id)
+        analysis = None
+        path = store.job_path(job_id) / "analysis.json"
+        if path.exists():
+            try:
+                analysis = json.loads(path.read_text("utf-8"))
+            except (OSError, ValueError):
+                analysis = None
+        label = minutes.LABELS.get(lang, minutes.LABELS["tr"])["minutes"]
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(),
+            save_filename=f"{_safe_name(Path(data['filename']).stem)} - {label}.docx", file_types=(EXPORT_TYPES["docx"],)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".docx":
+            target = target.with_name(target.name + ".docx")
+        _write(target, minutes.build(data, analysis, lang))
+        self._remember_dir("export_dir", str(target.parent))
+        return {"paths": [str(target)], "analysis": analysis is not None}
+
     # ---------------- folder watch ----------------
     def get_watch(self) -> dict:
         return self._watcher.status()

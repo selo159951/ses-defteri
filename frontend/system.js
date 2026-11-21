@@ -110,14 +110,14 @@ Object.assign(I18N.tr, {
   /* ---------- page ---------- */
   const page = $("system");
   function open() {
-    $("home").hidden = true; $("view").hidden = true; $("player").hidden = true;
-    page.hidden = false; $("homeBtn").hidden = false;
+    showPage("system");
     if (!info) skeleton(page, "system"); // first open: placeholder cards while the hardware is read
     refresh();
   }
   function close() { page.hidden = true; }
   $("sysBtn").onclick = open;
   $("homeBtn").addEventListener("click", close);
+  window.addEventListener("pageopen", (e) => { if (e.detail !== "system") close(); });
 
   async function loadLlm() {
     if (!window.pywebview?.api || typeof window.pywebview.api.get_llm_info !== "function") return null;
