@@ -1,0 +1,23 @@
+{
+  "version": "1.3.0",
+  "date": "2026-11-22",
+  "notes_tr": "Toplantı kaydı (bilgisayar sesi + mikrofon), isteğe bağlı canlı metin, toplantılarınız hakkında soru soran Asistan, şirket logolu Word tutanağı ve kendi şablonunuz, Ayarlar sayfası, uygulama içi güncelleme.",
+  "notes_en": "Meeting recording (computer sound + microphone), optional live text, an Assistant that answers questions about your meetings, Word minutes with your logo or your own template, a Settings page, in-app updates.",
+  "files": {
+    "standart": {
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Setup.exe",
+      "size": 162462312,
+      "sha256": "ddc2ee3254742b28b61334008b61819835c86b8795859222d15ff8c4beb6ad7a"
+    },
+    "nvidia": {
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-NVIDIA-Setup.exe",
+      "size": 1184625328,
+      "sha256": "87a9c3bb326d043ff61af3ef8354259f64ebd182bc21a1b93964a59726e2dddb"
+    },
+    "basit": {
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Basit-Setup.exe",
+      "size": 147373040,
+      "sha256": "9391ab69c2c2c8cdd7978936cf4c159b511b63f08ff884f92af4ae077587f61a"
+    }
+  }
+}
