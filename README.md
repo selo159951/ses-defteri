@@ -19,7 +19,7 @@ The installer needs no admin rights. It installs for the current user under `%LO
 
 **Uninstall:** Start menu → *Ses Defteri* → *Ses Defteri uygulamasını kaldır*, or Windows Settings → Apps → *Ses Defteri*. Recordings, saved voices and models in `%APPDATA%\SesDefteri` are kept; delete that folder to remove them too.
 
-The package is not signed, so Windows SmartScreen may warn: *More info* → *Run anyway*.
+The files are signed as "Selim Oğuz" with a self-made certificate. Windows does not know that certificate, so SmartScreen may still warn: *More info* → *Run anyway*.
 
 ## Features
 - Drag & drop any audio/video file (mp3, wav, m4a, mp4, ogg…); progress with remaining-time estimate
@@ -38,6 +38,10 @@ The package is not signed, so Windows SmartScreen may warn: *More info* → *Run
 - **Folder watch** (optional): new recordings in a chosen folder are processed by themselves
 - Pause / resume / cancel, several files in a queue, a first-run guided tour (**Guide** button to replay it)
 - Export the **Analysis** as Word / TXT / Markdown / JSON
+- **Record a meeting in the app**: the computer's sound (Teams, Meet, Zoom…) and the microphone together; written to disk as it records, so a crash loses nothing. Optional **live text** while recording (turn it off any time; it stops by itself when the PC cannot keep up)
+- **Assistant**: ask about your meetings in plain words ("What did Ahmet say about the app last week?"); answered on this PC by the meeting-mode model, with clickable sources, "not found" instead of guessing. People can have a title and a note
+- **Meeting minutes** as Word with your company name, logo and colour, chosen sections in your order, or your own Word template with placeholders (`{tarih}`, `{özet}`, `{kararlar}`, a task-table row …) — **Settings** page
+- **Updates**: at start the app reads a small version file from selimoguz.com.tr; a newer version is downloaded from this GitHub release, checked (size, SHA-256, "Selim Oğuz" signature) and installed; recordings and settings are kept. This is the only internet use and can be turned off in Settings
 
 ## Meeting mode (local AI analysis)
 After the transcript is ready (or on demand from the **Analysis** tab), the app reads the meeting on the PC and produces:

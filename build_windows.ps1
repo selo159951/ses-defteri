@@ -13,7 +13,7 @@ if (-not (Test-Path vendor\whispercpp\whisper-cli.exe)) { Write-Warning "vendor\
 $version = (.\.venv\Scripts\python tools\set_version.py).Trim()
 .\.venv\Scripts\python -m PyInstaller --noconfirm --clean SesDefteri.spec
 # which package this is: the updater downloads the same edition (backend\version.py edition())
-Set-Content -Encoding ascii -NoNewline dist\SesDefteri\_internal\edition.txt "standart"
+[IO.File]::WriteAllText((Join-Path $PWD dist\SesDefteri\_internal\edition.txt), "standart")  # Set-Content silently wrote nothing here
 # "Selim Oğuz" signature (tools\make_cert.ps1 once); the updater only installs setups signed by it
 & .\tools\sign.ps1 dist\SesDefteri\SesDefteri.exe
 Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri.zip SesDefteri; Pop-Location
@@ -23,7 +23,7 @@ if ($Gpu) {
     $dst = "dist\SesDefteri-NVIDIA"
     if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
     Copy-Item -Recurse dist\SesDefteri $dst
-    Set-Content -Encoding ascii -NoNewline "$dst\_internal\edition.txt" "nvidia"
+    [IO.File]::WriteAllText((Join-Path $PWD "$dst\_internal\edition.txt"), "nvidia")  # Set-Content silently wrote nothing here
     # the app looks for <app>\_internal\nvidia\*\bin\*.dll at start-up
     foreach ($pkg in "cublas", "cudnn", "cuda_nvrtc") {
         $src = ".venv\Lib\site-packages\nvidia\$pkg\bin"
