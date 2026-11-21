@@ -1,10 +1,10 @@
 ﻿# Build the simple app: .\build_windows.ps1  ->  Desktop\Projeler\Ses Defteri\Basit Sürüm (setup, zip, folder)
 # One package for every PC: runs on the processor, the speech model is downloaded on first start (internet once).
-# Uses the Python environment of the full project next to it (..\meet_speech_to_text\.venv).
+# Uses the Python environment of the full project next to it (..\Ana Sürüm\.venv).
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-$py = Join-Path $PSScriptRoot "..\meet_speech_to_text\.venv\Scripts"
-& "$py\pyinstaller.exe" --noconfirm --clean SesDefteri.spec
+$py = Join-Path $PSScriptRoot "..\Ana Sürüm\.venv\Scripts"
+& "$py\python.exe" -m PyInstaller --noconfirm --clean SesDefteri.spec
 # the Visual C++ runtime must be inside the package (a PC without the redistributable still has to work)
 foreach ($d in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "python312.dll") {
     if (-not (Test-Path "dist\SesDefteri\_internal\$d")) { throw "$d is missing from the package" }
