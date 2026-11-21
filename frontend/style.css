@@ -393,3 +393,20 @@ header .langwrap #langSel { padding-left:30px; }
 #settings .verdict { font-size:14px; font-weight:500; padding:10px 14px; }
 #settings .verdict.plain { background:var(--bg); border:1px solid var(--line); }
 @media (max-width:640px) { #settings .frow { grid-template-columns:1fr; gap:4px; } }
+
+/* meeting recording (recorder.js) */
+#drop .recrow { margin:14px 0 0; }
+.recbar { padding:8px 24px; background:var(--s3); border-bottom:1px solid var(--line); font-size:14px; }
+.recbar .rechead { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.recbar .spacer { flex:1; }
+.recdot { width:12px; height:12px; border-radius:50%; background:#dc2626; animation:recblink 1.2s infinite; flex:none; }
+.recdot.paused { background:var(--muted); animation:none; }
+@keyframes recblink { 50% { opacity:.3; } }
+.recmeter { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; }
+.recmeterbar { width:90px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; display:inline-block; }
+.recmeterbar > span { display:block; height:100%; background:#16a34a; transition:width .2s; }
+.recswitch { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+.livebox { margin-top:8px; max-height:180px; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
+.livebox p { margin:3px 0; }
+.recbar .livenote { margin:4px 0 0; font-size:12px; }
+@media (prefers-reduced-motion: reduce) { .recdot { animation:none; } }

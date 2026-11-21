@@ -19,6 +19,10 @@
     set_update_note: "The only internet use of the app: it reads a small version file. No recording or text is ever sent.",
     set_update_now: "Check now", set_checking: "Checking…",
     set_saved: "Saved", set_failed: "Could not save: {e}",
+    set_record: "Meeting recording", set_rec_system: "Record the computer's sound (Teams, Meet, Zoom, videos…)",
+    set_rec_mic: "Record the microphone", set_mic_which: "Microphone", set_mic_default: "Windows default microphone",
+    set_live_default: "Start live text with every recording (uses the computer more; can be switched during recording)",
+    set_rec_note: "The recording stays on this computer. If the app crashes, nothing is lost: it is offered at the next start.",
     minutes_btn: "Minutes", minutes_btn_title: "Meeting minutes as Word: logo, participants, summary, decisions, tasks (Settings page)",
     minutes_no_analysis: "Saved without summary, decisions and tasks: run the meeting analysis first for those.",
   });
@@ -40,6 +44,10 @@
     set_update_note: "Programın tek internet kullanımı budur: küçük bir sürüm dosyası okunur. Hiçbir kayıt ya da metin gönderilmez.",
     set_update_now: "Şimdi denetle", set_checking: "Bakılıyor…",
     set_saved: "Kaydedildi", set_failed: "Kaydedilemedi: {e}",
+    set_record: "Toplantı kaydı", set_rec_system: "Bilgisayardan gelen sesi kaydet (Teams, Meet, Zoom, video…)",
+    set_rec_mic: "Mikrofonu kaydet", set_mic_which: "Mikrofon", set_mic_default: "Windows'un varsayılan mikrofonu",
+    set_live_default: "Kayda başlarken canlı yazıyı da aç (bilgisayarı yorar; kayıt sırasında da açılıp kapatılabilir)",
+    set_rec_note: "Kayıt bu bilgisayarda kalır. Program çökerse kayıt kaybolmaz, bir sonraki açılışta sorulur.",
     minutes_btn: "Tutanak", minutes_btn_title: "Word toplantı tutanağı: logo, katılımcılar, özet, kararlar, görevler (Ayarlar sayfası)",
     minutes_no_analysis: "Özet, kararlar ve görevler olmadan kaydedildi: bunlar için önce toplantı analizini çalıştırın.",
   });
@@ -61,7 +69,10 @@
   const msg = (e) => (e && e.message) || String(e);
 
   async function load() {
-    [S.cfg, S.settings, S.info] = await Promise.all([call("get_minutes_settings"), call("get_settings"), call("get_app_info")]);
+    let dev;
+    [S.cfg, S.settings, S.info, dev] = await Promise.all([call("get_minutes_settings"), call("get_settings"), call("get_app_info"),
+      call("rec_devices").catch(() => ({ mics: [] }))]);
+    S.mics = dev.mics;
   }
   async function open() {
     if (job) await save();
@@ -141,6 +152,28 @@
         Object.fromEntries(["tarih", "kararlar", "date", "summary"].map((k) => [k, `{${k}}`]))) }), btns);
   }
 
+  function recordCard() {
+    const r = S.settings;
+    const setBool = (key) => async (e) => {
+      try { S.settings = await call("set_settings", { [key]: e.target.checked }); toast(t("set_saved")); }
+      catch (err) { toast(t("set_failed", { e: msg(err) })); }
+    };
+    const box = (key, label) => el("label", { className: "frow check" },
+      el("input", { type: "checkbox", checked: r[key] !== false && r[key] !== undefined ? !!r[key] : false, onchange: setBool(key) }),
+      el("span", { textContent: t(label) }));
+    const mic = el("select", { id: "setMic" }, el("option", { value: "", textContent: t("set_mic_default") }),
+      ...(S.mics || []).map((m) => el("option", { value: m.id, textContent: m.name, selected: m.id === r.rec_mic_id })));
+    mic.onchange = async () => {
+      try { S.settings = await call("set_settings", { rec_mic_id: mic.value }); toast(t("set_saved")); }
+      catch (err) { toast(t("set_failed", { e: msg(err) })); }
+    };
+    const kids = [box("rec_system", "set_rec_system"), box("rec_mic", "set_rec_mic"),
+      el("label", { className: "frow" }, el("span", { textContent: t("set_mic_which") }), mic)];
+    if (window.REC_LIVE !== false) kids.push(box("live_default", "set_live_default"));
+    kids.push(el("p", { className: "sline dim", textContent: t("set_rec_note") }));
+    return card(t("set_record"), ...kids);
+  }
+
   function updateCard() {
     const auto = el("input", { type: "checkbox", id: "setUpdAuto", checked: S.settings.update_check !== false });
     auto.onchange = async () => {
@@ -165,7 +198,7 @@
   }
 
   function draw() {
-    root.replaceChildren(el("h2", { textContent: t("set_title") }), companyCard(), minutesCard(), templateCard(), updateCard());
+    root.replaceChildren(el("h2", { textContent: t("set_title") }), recordCard(), companyCard(), minutesCard(), templateCard(), updateCard());
     hydrateIcons(root);
   }
 })();

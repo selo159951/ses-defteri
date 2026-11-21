@@ -30,11 +30,13 @@
   <button id="sysBtn" data-icon="cpu" data-i18n="system">Sistem</button>
 </header>
 <div id="updBar" class="updbar" role="status" aria-live="polite" hidden></div>
+<div id="recBar" class="recbar" role="region" aria-live="polite" hidden></div>
 
 <main id="home">
   <div id="drop" tabindex="0">
     <p class="big" data-i18n="drop"></p>
     <p><span data-i18n="or"></span> <a href="#" id="browseBtn" class="link" data-i18n="browse"></a></p>
+    <p class="recrow"><button id="recBtn" type="button" class="primary" data-icon="mic" data-i18n="rec_start" data-i18n-title="rec_start_title"></button></p>
     <details id="optsBox" class="opts">
       <summary><span data-icon="settings" data-i18n="options"></span><span id="optsSum" class="hint"></span></summary>
       <div class="optsbody" role="dialog" aria-modal="true">
@@ -229,5 +231,6 @@
 <script src="tour.js"></script>
 <script src="updater.js"></script>
 <script src="settings.js"></script>
+<script src="recorder.js"></script>
 </body>
 </html>

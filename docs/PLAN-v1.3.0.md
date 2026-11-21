@@ -198,6 +198,16 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
   - bozuk şablon → anlaşılır hata
 
 ## Aşama 3: Toplantı kaydı (Ana + Basit) ve canlı yazı (sadece Ana)
+**Durum (2026-11-21, Ana Sürüm):**
+- [x] 3.0 Deneme: `soundcard` (BSD) WASAPI loopback bu PC'de çalışıyor; sessizlikte de takılmadan sıfır veriyor. `requirements.txt` ve spec'e eklendi (`collect_all("soundcard")`, `cffi`). **Paketlenmiş exe'de çalıştığı Aşama 6 derlemesinde doğrulanacak.**
+- [x] `backend/meeting_recorder.py`: iki iz 48→16 kHz (sinc alçak geçiren), her 0,1 sn diske `.pcm`, duraklat, cihaz kopsa diğeri sürer, durdurunca karıştır (sessiz mikrofon yükseltilir) → `Toplantı <tarih saat>.wav` → normal iş. İş `audio.mp3`'ü oluşturunca ham klasör silinir. Çökme sonrası `leftovers()` / `recover()` / `discard()`.
+- [x] `LiveWriter`: ~12 sn'lik parçalar, en sessiz anda kesilir, düşük öncelikli iş parçacığı, 2 kez üst üste ses süresinden yavaşsa kendini durdurur ("slow"), hata olursa "error". Dosya işlenirken açılmaz ("busy").
+- [x] Köprü: `rec_devices, start_meeting, rec_status, set_live, pause_meeting, stop_meeting, cancel_meeting, rec_leftovers, recover_recording, discard_recording`; ayarlar `rec_system, rec_mic, rec_mic_id, live_default, rec_notice_done`. `Api.LIVE_TEXT` (Basit'te False olacak).
+- [x] Arayüz: `frontend/recorder.js` — ana sayfada "Toplantıyı kaydet", her sayfada görünen kırmızı şerit (süre, iki seviye çubuğu, Canlı yazı anahtarı, Duraklat, Durdur ve metne çevir, Sil), canlı metin paneli, ilk kayıtta KVKK uyarısı, yarım kalan kayıt şeridi. Ayarlar'da "Toplantı kaydı" kartı.
+- [x] `tests/test_meeting_recorder.py` (14 test), toplam 430 test geçti.
+- [x] Gerçek denemede: hoparlörden çalınan örnek konuşmayla 93 sn kayıt, canlı yazı 8 satır doğru yazdı, durdurunca iş "Tamamlandı" oldu, ham dosyalar silindi.
+- [ ] Gerçek bir Teams/Meet görüşmesinde iki kişili deneme (kullanıcı yapabilir).
+- [ ] Basit Sürüm'e aktarma (canlı yazısız) → Aşama 5.
 **3.0. Deneme (önce bu):** bilgisayar sesi yakalama.
 - Aday: **`soundcard`** kütüphanesi (MIT, WASAPI loopback): `sc.get_microphone(sc.default_speaker().name, include_loopback=True)`.
 - Bu PC'de YouTube videosu çalarken 10 sn kayıt yapılıp dinlenir. PyInstaller paketine girdiği doğrulanır (`collect_all("soundcard")`).

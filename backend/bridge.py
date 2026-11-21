@@ -229,7 +229,7 @@ class Api(SystemApi, LlmApi, SearchApi):
                 "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
                 "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
-                "update_check": updater.enabled()}
+                "update_check": updater.enabled(), **self._rec_settings()}
 
     def set_settings(self, values: dict) -> dict:
         if "use_gpu" in values:
@@ -251,7 +251,142 @@ class Api(SystemApi, LlmApi, SearchApi):
             asr.set_setting("language", values["language"])
         if "update_check" in values:
             asr.set_setting("update_check", bool(values["update_check"]))
+        for key in ("rec_system", "rec_mic", "live_default", "rec_notice_done"):
+            if key in values:
+                asr.set_setting(key, bool(values[key]))
+        if "rec_mic_id" in values:
+            asr.set_setting("rec_mic_id", str(values["rec_mic_id"] or "")[:300])
         return self.get_settings()
+
+    # ---------------- meeting recording (computer sound + microphone) ----------------
+    LIVE_TEXT = True  # the simple edition has no live text
+
+    def _rec_settings(self) -> dict:
+        s = asr.get_settings()
+        return {"rec_system": s.get("rec_system", True) is not False, "rec_mic": s.get("rec_mic", True) is not False,
+                "rec_mic_id": s.get("rec_mic_id") or "", "live_default": bool(s.get("live_default", False)),
+                "rec_notice_done": bool(s.get("rec_notice_done", False))}
+
+    def rec_devices(self) -> dict:
+        from . import meeting_recorder
+
+        return {"mics": meeting_recorder.list_mics(), "settings": self._rec_settings(), "live_available": self.LIVE_TEXT}
+
+    def rec_status(self) -> dict:
+        rec = getattr(self, "_rec", None)
+        live = getattr(self, "_live", None)
+        if not rec:
+            return {"active": False}
+        return {**rec.status(), "live": live.status() if live else None,
+                "live_blocked": getattr(self, "_live_blocked", "")}
+
+    def _live_transcribe(self, samples, duration) -> str:
+        words, _ = asr.transcribe(samples, duration, lambda p: None)
+        return "".join(w.text for w in words).strip()
+
+    def _start_live(self) -> None:
+        from . import meeting_recorder
+
+        self._live_blocked = ""
+        if not self.LIVE_TEXT:
+            return
+        if pipeline._current["id"]:  # a file is being transcribed: the model is busy
+            self._live_blocked = "busy"
+            return
+        live = meeting_recorder.LiveWriter(self._live_transcribe)
+        live._offset = self._rec.seconds() if getattr(self, "_rec", None) else 0.0
+        self._live = live.start(self._rec.devices)
+
+    def start_meeting(self, live: bool | None = None) -> dict:
+        from . import meeting_recorder
+
+        if getattr(self, "_rec", None):
+            return self.rec_status()
+        s = self._rec_settings()
+        devices = meeting_recorder.open_devices(s["rec_system"], s["rec_mic"], s["rec_mic_id"] or None)
+        if not devices:
+            raise ValueError("no microphone or speaker was found")
+        self._live = None
+        self._rec = meeting_recorder.MeetingRecorder(devices, on_audio=self._feed_live)
+        self._rec.start()
+        if live if live is not None else s["live_default"]:
+            self._start_live()
+        return self.rec_status()
+
+    def _feed_live(self, source, samples) -> None:
+        live = getattr(self, "_live", None)
+        if live:
+            live.feed(source, samples)
+
+    def set_live(self, on: bool) -> dict:
+        if not getattr(self, "_rec", None):
+            return {"active": False}
+        live = getattr(self, "_live", None)
+        if on and (not live or live.state != "running"):
+            old = live.lines if live else []
+            self._start_live()
+            if getattr(self, "_live", None) and old and self._live is not live:
+                self._live.lines = list(old)
+        elif not on and live:
+            live.stop()
+        return self.rec_status()
+
+    def pause_meeting(self, on: bool = True) -> dict:
+        if getattr(self, "_rec", None):
+            self._rec.pause(bool(on))
+        return self.rec_status()
+
+    def stop_meeting(self) -> dict:
+        """Stop, mix and process the recording like a dropped file."""
+        rec = getattr(self, "_rec", None)
+        if not rec:
+            return {"active": False}
+        live = getattr(self, "_live", None)
+        if live:
+            live.stop()
+        self._rec, self._live = None, None
+        wav = rec.stop()
+        return self._start_recording_job(wav)
+
+    def cancel_meeting(self) -> dict:
+        rec = getattr(self, "_rec", None)
+        if getattr(self, "_live", None):
+            self._live.stop()
+        self._rec, self._live = None, None
+        if rec:
+            rec.cancel()
+        return {"active": False}
+
+    def _start_recording_job(self, wav: Path) -> dict:
+        from . import meeting_recorder
+
+        folder = wav.parent
+        job_id = store.create_job(wav.name)
+        store.update_job(job_id, source_path=str(wav), recorded=True)
+        pipeline.enqueue(job_id)
+
+        def run():
+            run_job(job_id, wav, keep_source=True)
+            if (store.job_path(job_id) / "audio.mp3").exists():  # the job has its own copy: drop the raw recording
+                meeting_recorder.done(folder)
+        threading.Thread(target=run, daemon=True).start()
+        return {"id": job_id, "filename": wav.name}
+
+    def rec_leftovers(self) -> list:
+        from . import meeting_recorder
+
+        return meeting_recorder.leftovers()
+
+    def recover_recording(self, folder: str) -> dict:
+        from . import meeting_recorder
+
+        return self._start_recording_job(meeting_recorder.recover(folder))
+
+    def discard_recording(self, folder: str) -> list:
+        from . import meeting_recorder
+
+        meeting_recorder.discard(folder)
+        return meeting_recorder.leftovers()
 
     # ---------------- version and updates ----------------
     def get_app_info(self) -> dict:

@@ -5,5 +5,6 @@ numpy
 onnxruntime
 tokenizers
 sounddevice
+soundcard
 python-docx
 pytest
