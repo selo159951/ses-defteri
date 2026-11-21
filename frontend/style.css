@@ -292,3 +292,52 @@ header .langwrap #langSel { padding-left:30px; }
 .fadein > *:nth-child(4) { animation-delay:.12s; } .fadein > *:nth-child(n+5) { animation-delay:.16s; }
 @keyframes fadeup { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .sk::after, .fadein > * { animation:none; } }
+
+/* update banner (updater.js) */
+.updbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 24px; background:var(--s0); border-bottom:1px solid var(--line); font-size:14px; }
+.updbar .updic .ic { width:18px; height:18px; vertical-align:-4px; color:var(--accent); }
+.updbar .updmsg { flex:1 1 280px; }
+.updbar .updnotes summary { cursor:pointer; color:var(--accent); }
+.updbar .updnotes div { white-space:pre-line; margin-top:4px; max-width:640px; }
+.updbar .updbarfill { flex:0 0 200px; margin:0; }
+.updbar .updfill { height:100%; background:var(--accent); transition:width .4s; }
+.updbar .updnotes { order:5; flex-basis:100%; }
+
+/* Settings page (settings.js) */
+#settings { max-width:860px; margin:0 auto; padding:16px 24px; display:flex; flex-direction:column; gap:14px; }
+#settings h2 { margin:0; }
+#settings .frow { display:grid; grid-template-columns:150px 1fr; align-items:center; gap:12px; padding:4px 0; }
+#settings .frow.check { display:flex; gap:8px; }
+#settings .frow input:not([type]) { max-width:420px; }
+#settings input[type=color] { width:56px; height:32px; padding:2px; }
+#settings .btnrow { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+#settings .logobox { min-height:40px; display:flex; align-items:center; }
+#settings .logobox img { max-height:64px; max-width:240px; border:1px solid var(--line); border-radius:6px; padding:4px; background:#fff; }
+#settings .seclist { list-style:none; margin:0; padding:0; }
+#settings .seclist li { display:flex; align-items:center; gap:6px; padding:5px 0; border-top:1px solid var(--line); }
+#settings .seclist li:first-child { border-top:0; }
+#settings .seclist li.off label { opacity:.6; }
+#settings .seclist .spacer { flex:1; }
+#settings .verdict { font-size:14px; font-weight:500; padding:10px 14px; }
+#settings .verdict.plain { background:var(--bg); border:1px solid var(--line); }
+@media (max-width:640px) { #settings .frow { grid-template-columns:1fr; gap:4px; } }
+
+/* meeting recording (recorder.js) */
+#drop .recrow { margin:14px 0 0; }
+.recbar { padding:8px 24px; background:var(--s3); border-bottom:1px solid var(--line); font-size:14px; }
+.recbar .rechead { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.recbar .spacer { flex:1; }
+.recdot { width:12px; height:12px; border-radius:50%; background:#dc2626; animation:recblink 1.2s infinite; flex:none; }
+.recdot.paused { background:var(--muted); animation:none; }
+@keyframes recblink { 50% { opacity:.3; } }
+.recmeter { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; }
+.recmeterbar { width:90px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; display:inline-block; }
+.recmeterbar > span { display:block; height:100%; background:#16a34a; transition:width .2s; }
+.recswitch { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+.livebox { margin-top:8px; max-height:180px; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
+.livebox p { margin:3px 0; }
+.recbar .livenote { margin:4px 0 0; font-size:12px; }
+@media (prefers-reduced-motion: reduce) { .recdot { animation:none; } }
+.pcard .pinfo { gap:8px; flex-wrap:wrap; }
+.pcard .pinfo .ptitle { flex:0 1 240px; } .pcard .pinfo .pnote { flex:1 1 300px; }
+.updbar .updnotes { order:5; flex-basis:100%; }

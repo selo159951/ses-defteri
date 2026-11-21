@@ -13,6 +13,8 @@ if sys.platform == "win32":
     try:
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SelimOguz.SesDefteri.Basit")
+        # the installer (AppMutex) sees that the app is running; released by Windows when the process ends
+        _MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "SesDefteriBasitMutex")
     except Exception:
         pass
 

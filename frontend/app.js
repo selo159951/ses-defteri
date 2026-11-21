@@ -280,6 +280,7 @@ async function finished(id) {
 async function openJob(id) {
   // switch pages at once and show placeholder lines; the recording (can be long) loads behind them
   $("home").hidden = true; $("view").hidden = false; $("player").hidden = false; $("homeBtn").hidden = false;
+  for (const p of PAGES) { const e = $(p); if (e) e.hidden = true; }
   $("title").textContent = ""; $("speakers").replaceChildren(); skeleton($("segs"), "lines");
   let j;
   try { j = await call("get_job", id); }
@@ -807,6 +808,7 @@ function setLang(l, persist = true) {
   if (gpuState) showGpu(gpuState);
   if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
+  window.dispatchEvent(new Event("langchange"));
 }
 $("langSel").onchange = (e) => setLang(e.target.value);
 $("aboutBtn").onclick = () => $("aboutDlg").showModal();
@@ -830,6 +832,14 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Escape") $("selPop").hidden = true;
 });
 $("helpBtn").onclick = () => $("help").showModal();
+
+/* ================= pages ================= */
+const PAGES = ["system", "people", "settings"];
+function showPage(id) {
+  for (const p of ["home", "view", "player", ...PAGES]) { const e = $(p); if (e) e.hidden = p !== id; }
+  $("homeBtn").hidden = false;
+  window.dispatchEvent(new CustomEvent("pageopen", { detail: id }));
+}
 
 /* ================= wiring ================= */
 $("homeBtn").onclick = async () => { await save(); audio.pause(); $("view").hidden = true; $("player").hidden = true; $("home").hidden = false; $("homeBtn").hidden = true; job = null; loadJobs(); };

@@ -4,7 +4,13 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $py = Join-Path $PSScriptRoot "..\Ana Sürüm\.venv\Scripts"
+# the version lives in backend\version.py only
+$version = (& "$py\python.exe" tools\set_version.py).Trim()
 & "$py\python.exe" -m PyInstaller --noconfirm --clean SesDefteri.spec
+# which package this is: the updater downloads the same edition
+Set-Content -Encoding ascii -NoNewline dist\SesDefteri\_internal\edition.txt "basit"
+# "Selim Oğuz" signature; the updater only installs setups signed by it
+& .\tools\sign.ps1 dist\SesDefteri\SesDefteri.exe
 # the Visual C++ runtime must be inside the package (a PC without the redistributable still has to work)
 foreach ($d in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "python312.dll") {
     if (-not (Test-Path "dist\SesDefteri\_internal\$d")) { throw "$d is missing from the package" }
@@ -18,7 +24,7 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 Copy-Item -Recurse dist\SesDefteri $stage
 Copy-Item KULLANIM.txt $stage  # the one-page guide next to the exe
 if (Test-Path dist\SesDefteri-Basit.zip) { Remove-Item -Force dist\SesDefteri-Basit.zip }
-Push-Location dist; & "$env:SystemRoot\System32	ar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
+Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri-Basit.zip SesDefteri-Basit; Pop-Location
 $out = Join-Path $dest "SesDefteri-Basit (kurulumsuz)"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 Copy-Item -Recurse $stage $out
@@ -27,7 +33,8 @@ Copy-Item -Force dist\SesDefteri-Basit.zip $dest
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($iscc) {
-    & $iscc /Q /DSrc=..\dist\SesDefteri installer\SesDefteri.iss
+    & $iscc /Q /DSrc=..\dist\SesDefteri "/DAppVersion=$version" installer\SesDefteri.iss
+    & .\tools\sign.ps1 dist\SesDefteri-Basit-Setup.exe
     Copy-Item -Force dist\SesDefteri-Basit-Setup.exe $dest
 } else { Write-Warning "Inno Setup 6 not found: no Setup.exe (the folder and .zip are still built)" }
 Write-Host "Done: $dest"

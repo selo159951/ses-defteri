@@ -3,5 +3,6 @@ sherpa-onnx
 pywebview
 numpy
 sounddevice
+soundcard
 python-docx
 pytest

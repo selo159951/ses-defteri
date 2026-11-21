@@ -11,7 +11,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import asr, denoise, export, models, store
+from . import asr, denoise, export, models, store, updater, version
 from . import pipeline
 from .watcher import Watcher
 from .pipeline import run_job
@@ -266,7 +266,8 @@ class Api(SystemApi, LlmApi):
                 "denoise_threshold": round(denoise.current_threshold(), 1),
                 "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
-                "tour_job_done": bool(asr.get_settings().get("tour_job_done", False))}
+                "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
+                "update_check": updater.enabled(), **self._rec_settings()}
 
     def set_settings(self, values: dict) -> dict:
         if "use_gpu" in values:
@@ -286,7 +287,168 @@ class Api(SystemApi, LlmApi):
                 asr.set_setting(key, bool(values[key]))
         if values.get("language") in asr.LANGUAGES:
             asr.set_setting("language", values["language"])
+        if "update_check" in values:
+            asr.set_setting("update_check", bool(values["update_check"]))
+        for key in ("rec_system", "rec_mic", "live_default", "rec_notice_done"):
+            if key in values:
+                asr.set_setting(key, bool(values[key]))
+        if "rec_mic_id" in values:
+            asr.set_setting("rec_mic_id", str(values["rec_mic_id"] or "")[:300])
         return self.get_settings()
+
+    # ---------------- meeting recording (computer sound + microphone) ----------------
+    LIVE_TEXT = False  # simple edition: no live text
+    SIMPLE = True     # short minutes without analysis
+
+    def _rec_settings(self) -> dict:
+        s = asr.get_settings()
+        return {"rec_system": s.get("rec_system", True) is not False, "rec_mic": s.get("rec_mic", True) is not False,
+                "rec_mic_id": s.get("rec_mic_id") or "", "live_default": bool(s.get("live_default", False)),
+                "rec_notice_done": bool(s.get("rec_notice_done", False))}
+
+    def rec_devices(self) -> dict:
+        from . import meeting_recorder
+
+        return {"mics": meeting_recorder.list_mics(), "settings": self._rec_settings(), "live_available": self.LIVE_TEXT}
+
+    def rec_status(self) -> dict:
+        rec = getattr(self, "_rec", None)
+        live = getattr(self, "_live", None)
+        if not rec:
+            return {"active": False}
+        return {**rec.status(), "live": live.status() if live else None,
+                "live_blocked": getattr(self, "_live_blocked", "")}
+
+    def _live_transcribe(self, samples, duration) -> str:
+        words, _ = asr.transcribe(samples, duration, lambda p: None)
+        return "".join(w.text for w in words).strip()
+
+    def _start_live(self) -> None:
+        from . import meeting_recorder
+
+        self._live_blocked = ""
+        if not self.LIVE_TEXT:
+            return
+        if pipeline._current["id"]:  # a file is being transcribed: the model is busy
+            self._live_blocked = "busy"
+            return
+        live = meeting_recorder.LiveWriter(self._live_transcribe)
+        live._offset = self._rec.seconds() if getattr(self, "_rec", None) else 0.0
+        self._live = live.start(self._rec.devices)
+
+    def start_meeting(self, live: bool | None = None) -> dict:
+        from . import meeting_recorder
+
+        if getattr(self, "_rec", None):
+            return self.rec_status()
+        s = self._rec_settings()
+        devices = meeting_recorder.open_devices(s["rec_system"], s["rec_mic"], s["rec_mic_id"] or None)
+        if not devices:
+            raise ValueError("no microphone or speaker was found")
+        self._live = None
+        self._rec = meeting_recorder.MeetingRecorder(devices, on_audio=self._feed_live)
+        self._rec.start()
+        if live if live is not None else s["live_default"]:
+            self._start_live()
+        return self.rec_status()
+
+    def _feed_live(self, source, samples) -> None:
+        live = getattr(self, "_live", None)
+        if live:
+            live.feed(source, samples)
+
+    def set_live(self, on: bool) -> dict:
+        if not getattr(self, "_rec", None):
+            return {"active": False}
+        live = getattr(self, "_live", None)
+        if on and (not live or live.state != "running"):
+            old = live.lines if live else []
+            self._start_live()
+            if getattr(self, "_live", None) and old and self._live is not live:
+                self._live.lines = list(old)
+        elif not on and live:
+            live.stop()
+        return self.rec_status()
+
+    def pause_meeting(self, on: bool = True) -> dict:
+        if getattr(self, "_rec", None):
+            self._rec.pause(bool(on))
+        return self.rec_status()
+
+    def stop_meeting(self) -> dict:
+        """Stop, mix and process the recording like a dropped file."""
+        rec = getattr(self, "_rec", None)
+        if not rec:
+            return {"active": False}
+        live = getattr(self, "_live", None)
+        if live:
+            live.stop()
+        self._rec, self._live = None, None
+        wav = rec.stop()
+        return self._start_recording_job(wav)
+
+    def cancel_meeting(self) -> dict:
+        rec = getattr(self, "_rec", None)
+        if getattr(self, "_live", None):
+            self._live.stop()
+        self._rec, self._live = None, None
+        if rec:
+            rec.cancel()
+        return {"active": False}
+
+    def _start_recording_job(self, wav: Path) -> dict:
+        from . import meeting_recorder
+
+        folder = wav.parent
+        job_id = store.create_job(wav.name)
+        store.update_job(job_id, source_path=str(wav), recorded=True)
+        pipeline.enqueue(job_id)
+
+        def run():
+            run_job(job_id, wav, keep_source=True)
+            if (store.job_path(job_id) / "audio.mp3").exists():  # the job has its own copy: drop the raw recording
+                meeting_recorder.done(folder)
+        threading.Thread(target=run, daemon=True).start()
+        return {"id": job_id, "filename": wav.name}
+
+    def rec_leftovers(self) -> list:
+        from . import meeting_recorder
+
+        return meeting_recorder.leftovers()
+
+    def recover_recording(self, folder: str) -> dict:
+        from . import meeting_recorder
+
+        return self._start_recording_job(meeting_recorder.recover(folder))
+
+    def discard_recording(self, folder: str) -> list:
+        from . import meeting_recorder
+
+        meeting_recorder.discard(folder)
+        return meeting_recorder.leftovers()
+
+    # ---------------- version and updates ----------------
+    def get_app_info(self) -> dict:
+        return {"version": version.VERSION, "edition": version.edition()}
+
+    def check_update(self, force: bool = False, lang: str = "tr") -> dict:
+        updater.check(bool(force))
+        return updater.status(lang)
+
+    def update_status(self, lang: str = "tr") -> dict:
+        return updater.status(lang)
+
+    def download_update(self, lang: str = "tr") -> dict:
+        updater.download()
+        return updater.status(lang)
+
+    def snooze_update(self) -> dict:
+        return updater.snooze()
+
+    def install_update(self) -> dict:
+        """Runs the downloaded setup after this window closes; the setup starts the new version."""
+        return updater.install(lambda: self._window().destroy())
+
 
     # ---------------- meeting analysis ----------------
     def analyze_job(self, job_id: str) -> dict:
@@ -332,6 +494,120 @@ class Api(SystemApi, LlmApi):
         _write(target, export.render(data, "edited", "docx", lang))
         self._remember_dir("export_dir", str(target.parent))
         return {"paths": [str(target)]}
+
+    # ---------------- meeting minutes (Settings page + "Minutes" button) ----------------
+    def get_minutes_settings(self) -> dict:
+        from . import minutes
+
+        return {**minutes.config(), "logo_data": self._logo_data()}
+
+    def _logo_data(self) -> str:
+        import base64
+
+        from . import minutes
+
+        p = minutes.logo_path()
+        if not p:
+            return ""
+        mime = "image/png" if p.suffix == ".png" else "image/jpeg"
+        return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+
+    def set_minutes_settings(self, values: dict) -> dict:
+        from . import minutes
+
+        if "company_name" in values:
+            asr.set_setting("company_name", str(values["company_name"] or "").strip()[:120])
+        if "company_color" in values:
+            asr.set_setting("company_color", minutes.clean_color(values["company_color"]))
+        if "sections" in values:
+            asr.set_setting("minutes_sections", minutes.clean_sections(values["sections"]))
+        return self.get_minutes_settings()
+
+    def pick_logo(self) -> dict:
+        import webview
+
+        from . import minutes
+
+        f = _first(self._window().create_file_dialog(
+            webview.FileDialog.OPEN, file_types=("Picture (*.png;*.jpg;*.jpeg)",)))
+        if f:
+            minutes.set_logo(f)
+        return self.get_minutes_settings()
+
+    def remove_logo(self) -> dict:
+        from . import minutes
+
+        minutes.remove_logo()
+        return self.get_minutes_settings()
+
+    def pick_template(self) -> dict:
+        import webview
+
+        from . import minutes
+
+        f = _first(self._window().create_file_dialog(
+            webview.FileDialog.OPEN, directory=self._last_dir(), file_types=(EXPORT_TYPES["docx"],)))
+        if f:
+            minutes.set_template(f)
+        return self.get_minutes_settings()
+
+    def remove_template(self) -> dict:
+        from . import minutes
+
+        minutes.remove_template()
+        return self.get_minutes_settings()
+
+    def save_sample_template(self, lang: str = "tr") -> dict:
+        """A starter Word template with every placeholder, to edit in Word and load back."""
+        import webview
+
+        from . import minutes
+
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(),
+            save_filename="tutanak-sablonu.docx" if lang == "tr" else "minutes-template.docx",
+            file_types=(EXPORT_TYPES["docx"],)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".docx":
+            target = target.with_name(target.name + ".docx")
+        _write(target, minutes.sample_template(lang))
+        self._remember_dir("export_dir", str(target.parent))
+        return {"paths": [str(target)]}
+
+    def save_minutes(self, job_id: str, lang: str = "tr") -> dict:
+        """Meeting minutes as Word: the user's template when there is one, otherwise the built-in layout."""
+        import json
+
+        import webview
+
+        from . import minutes
+
+        data = _job(job_id)
+        analysis = None
+        path = store.job_path(job_id) / "analysis.json"
+        if path.exists():
+            try:
+                analysis = json.loads(path.read_text("utf-8"))
+            except (OSError, ValueError):
+                analysis = None
+        label = minutes.LABELS.get(lang, minutes.LABELS["tr"])["minutes"]
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(),
+            save_filename=f"{_safe_name(Path(data['filename']).stem)} - {label}.docx", file_types=(EXPORT_TYPES["docx"],)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".docx":
+            target = target.with_name(target.name + ".docx")
+        if self.SIMPLE:  # no analysis in the simple edition: who was there and what was said
+            _write(target, minutes.build(data, None, lang, use_template=False, note_missing=False,
+                                         sections=["participants", "transcript"]))
+        else:
+            _write(target, minutes.build(data, analysis, lang))
+        self._remember_dir("export_dir", str(target.parent))
+        return {"paths": [str(target)], "analysis": analysis is not None}
 
     # ---------------- folder watch (off by default) ----------------
     def get_watch(self) -> dict:
