@@ -258,8 +258,8 @@ def install(quit_app, pid: int | None = None, popen=subprocess.Popen) -> dict:
     if edition() == "dev" or os.name != "nt":
         return _set(**{**_state, "error": "not an installed app"})
     cmd, env = install_command(setup, pid or os.getpid())
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0) \
-        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    # no DETACHED_PROCESS: PowerShell started without a console exits at once and never runs the setup
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     popen(cmd, env={**os.environ, **env}, creationflags=flags, close_fds=True)
     _set(state="installing")
     quit_app()
