@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ses Defteri</title>
+<meta name="description" content="Toplantı kayıtlarını konuşmacılarıyla birlikte düzenlenebilir metne dönüştüren, tamamen çevrimdışı çalışan masaüstü uygulaması.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+:root { --bg:#f7f8fa; --fg:#16181d; --muted:#5f6570; --card:#fff; --line:#e3e5e9; --accent:#2563eb; --soft:#e8effd; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14161b; --fg:#e8e8ea; --muted:#9aa0aa; --card:#1d2027; --line:#30343d; --accent:#6ea0ff; --soft:#1c2a45; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, "Segoe UI", sans-serif; }
+main { max-width:760px; margin:0 auto; padding:48px 16px 64px; }
+.head { display:flex; align-items:center; gap:16px; }
+.head img { width:64px; height:64px; }
+h1 { font-size:32px; margin:0; letter-spacing:-.01em; }
+.lead { color:var(--muted); margin:6px 0 0; }
+.ver { display:inline-block; margin-top:28px; font-size:14px; color:var(--muted); }
+.cards { display:grid; gap:12px; margin:12px 0 32px; }
+.card { display:flex; align-items:center; gap:16px; padding:16px 18px; background:var(--card); border:1px solid var(--line); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .15s; }
+.card:hover { border-color:var(--accent); }
+.card.main { border-color:var(--accent); background:var(--soft); }
+.card div { flex:1; min-width:0; }
+.card b { display:block; font-size:17px; }
+.card span { color:var(--muted); font-size:14px; }
+.card svg { flex:none; width:24px; height:24px; color:var(--accent); }
+h2 { font-size:18px; margin:32px 0 8px; }
+.notes { white-space:pre-line; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; font-size:15px; }
+ul { padding-left:20px; } li { margin:4px 0; }
+.muted { color:var(--muted); font-size:14px; }
+a { color:var(--accent); }
+footer { margin-top:48px; color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <img src="logo.svg" alt="">
+    <div>
+      <h1>Ses Defteri</h1>
+      <p class="lead">Toplantı kayıtlarını konuşmacılarıyla birlikte düzenlenebilir metne dönüştürür. Tamamen çevrimdışı çalışır: ses ve metin bilgisayardan çıkmaz.</p>
+    </div>
+  </div>
+
+  <span class="ver" id="ver">Son sürüm yükleniyor…</span>
+  <div class="cards" id="cards"></div>
+
+  <h2>Hangisini indirmeliyim?</h2>
+  <ul>
+    <li><b>Standart:</b> her Windows 10/11 bilgisayar için. AMD, Intel ve NVIDIA ekran kartlarını kullanır.</li>
+    <li><b>NVIDIA:</b> NVIDIA ekran kartı olan bilgisayarlarda en hızlısı (daha büyük dosya).</li>
+    <li><b>Basit:</b> bilgisayarı az kullananlar için sade sürüm: sürükle bırak, işle, oku, dışa aktar.</li>
+  </ul>
+  <p class="muted">Kurulum yönetici izni istemez. Program yeni sürümleri kendisi bildirir ve kayıtlarınızı silmeden günceller.
+    Windows mavi bir uyarı gösterirse: <i>Ek bilgi</i> → <i>Yine de çalıştır</i> (dosyalar "Selim Oğuz" adıyla imzalıdır).</p>
+
+  <h2 id="notesHead" hidden>Bu sürümde neler var</h2>
+  <div class="notes" id="notes" hidden></div>
+
+  <footer>
+    Fikir babası: Umut Akbaş · Geliştirici: <a href="https://selimoguz.com.tr">Selim Oğuz</a> ve Claude ·
+    <a href="https://github.com/selo159951/ses-defteri">Kaynak kod (GitHub)</a>
+  </footer>
+</main>
+<script>
+const NAMES = {
+  standart: ["Standart sürüm", "Her bilgisayar için"],
+  nvidia: ["NVIDIA sürümü", "NVIDIA ekran kartı olanlar için, en hızlısı"],
+  basit: ["Basit sürüm", "Sade arayüz, az özellik"],
+};
+const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>';
+const mb = (n) => (n / 1048576 >= 1024 ? (n / 1073741824).toFixed(1) + " GB" : Math.round(n / 1048576) + " MB");
+fetch("surum.json", { cache: "no-cache" }).then((r) => r.json()).then((m) => {
+  document.getElementById("ver").textContent = `Son sürüm ${m.version}` + (m.date ? ` · ${new Date(m.date).toLocaleDateString("tr-TR")}` : "");
+  const cards = document.getElementById("cards");
+  for (const ed of ["standart", "nvidia", "basit"]) {
+    const f = m.files[ed];
+    if (!f) continue;
+    const a = document.createElement("a");
+    a.className = "card" + (ed === "standart" ? " main" : "");
+    a.href = f.url;
+    const div = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = NAMES[ed][0];
+    const s = document.createElement("span"); s.textContent = `${NAMES[ed][1]} · ${mb(f.size)}`;
+    div.append(b, s);
+    a.append(div);
+    a.insertAdjacentHTML("beforeend", ICON);
+    cards.append(a);
+  }
+  if (m.notes_tr) {
+    document.getElementById("notes").textContent = m.notes_tr;
+    document.getElementById("notes").hidden = document.getElementById("notesHead").hidden = false;
+  }
+}).catch(() => {
+  document.getElementById("ver").innerHTML = 'Sürüm bilgisi okunamadı. Dosyalar: <a href="https://github.com/selo159951/ses-defteri/releases/latest">GitHub</a>';
+});
+</script>
+</body>
+</html>

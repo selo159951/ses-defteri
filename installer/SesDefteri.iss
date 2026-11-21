@@ -9,7 +9,7 @@
   #define OutName "SesDefteri-Setup"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "0.0.0"
 #endif
 
 [Setup]
@@ -33,6 +33,10 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
+; app.py holds this mutex while running: a manual install asks to close the app first
+AppMutex=SesDefteriMutex
+CloseApplications=yes
+SignedUninstaller=no
 
 [Languages]
 Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
@@ -51,6 +55,8 @@ Name: "{userdesktop}\Ses Defteri"; Filename: "{app}\SesDefteri.exe"; Tasks: desk
 
 [Run]
 Filename: "{app}\SesDefteri.exe"; Description: "{cm:LaunchProgram,Ses Defteri}"; Flags: nowait postinstall skipifsilent
+; after an in-app update (silent setup) the new version opens by itself
+Filename: "{app}\SesDefteri.exe"; Flags: nowait; Check: WizardSilent
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"

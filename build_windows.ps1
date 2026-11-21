@@ -1,4 +1,4 @@
-# Build the Windows app.
+﻿# Build the Windows app.
 #   .\build_windows.ps1        -> dist\SesDefteri.zip          (any PC: CPU, plus AMD/Intel/NVIDIA GPUs via Vulkan)
 #   .\build_windows.ps1 -Gpu   -> also dist\SesDefteri-NVIDIA.zip (adds CUDA libraries: fastest on NVIDIA, ~1.4 GB)
 # Vulkan needs vendor\whispercpp (run tools\build_whispercpp.ps1 once); without it the build is CPU/CUDA only.
@@ -9,7 +9,13 @@ if (-not (Test-Path .venv)) { py -3.12 -m venv .venv }
 .\.venv\Scripts\python -m pip install -q -r requirements.txt pyinstaller
 .\.venv\Scripts\python fetch_models.py
 if (-not (Test-Path vendor\whispercpp\whisper-cli.exe)) { Write-Warning "vendor\whispercpp missing: this build has no Vulkan (AMD/Intel) support" }
+# the version lives in backend\version.py only: this writes the exe's version resource and gives it to the installer
+$version = (.\.venv\Scripts\python tools\set_version.py).Trim()
 .\.venv\Scripts\python -m PyInstaller --noconfirm --clean SesDefteri.spec
+# which package this is: the updater downloads the same edition (backend\version.py edition())
+Set-Content -Encoding ascii -NoNewline dist\SesDefteri\_internal\edition.txt "standart"
+# "Selim Oğuz" signature (tools\make_cert.ps1 once); the updater only installs setups signed by it
+& .\tools\sign.ps1 dist\SesDefteri\SesDefteri.exe
 Push-Location dist; & "$env:SystemRoot\System32\tar.exe" -a -c -f SesDefteri.zip SesDefteri; Pop-Location
 
 if ($Gpu) {
@@ -17,6 +23,7 @@ if ($Gpu) {
     $dst = "dist\SesDefteri-NVIDIA"
     if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
     Copy-Item -Recurse dist\SesDefteri $dst
+    Set-Content -Encoding ascii -NoNewline "$dst\_internal\edition.txt" "nvidia"
     # the app looks for <app>\_internal\nvidia\*\bin\*.dll at start-up
     foreach ($pkg in "cublas", "cudnn", "cuda_nvrtc") {
         $src = ".venv\Lib\site-packages\nvidia\$pkg\bin"
@@ -32,7 +39,11 @@ if ($Gpu) {
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($iscc) {
-    & $iscc /Q /DSrc=..\dist\SesDefteri /DOutName=SesDefteri-Setup installer\SesDefteri.iss
-    if ($Gpu) { & $iscc /Q /DSrc=..\dist\SesDefteri-NVIDIA /DOutName=SesDefteri-NVIDIA-Setup installer\SesDefteri.iss }
+    & $iscc /Q /DSrc=..\dist\SesDefteri /DOutName=SesDefteri-Setup "/DAppVersion=$version" installer\SesDefteri.iss
+    & .\tools\sign.ps1 dist\SesDefteri-Setup.exe
+    if ($Gpu) {
+        & $iscc /Q /DSrc=..\dist\SesDefteri-NVIDIA /DOutName=SesDefteri-NVIDIA-Setup "/DAppVersion=$version" installer\SesDefteri.iss
+        & .\tools\sign.ps1 dist\SesDefteri-NVIDIA-Setup.exe
+    }
 } else { Write-Warning "Inno Setup 6 not found: no Setup.exe (the .zip files are still built)" }
 Write-Host "Done. Share dist\SesDefteri-Setup.exe (or the .zip files: unzip, run SesDefteri.exe)"

@@ -11,7 +11,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import asr, denoise, export, store
+from . import asr, denoise, export, store, updater, version
 from . import pipeline
 from .watcher import Watcher
 from .pipeline import run_job
@@ -228,7 +228,8 @@ class Api(SystemApi, LlmApi, SearchApi):
                 "denoise_threshold": round(denoise.current_threshold(), 1),
                 "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
-                "tour_job_done": bool(asr.get_settings().get("tour_job_done", False))}
+                "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
+                "update_check": updater.enabled()}
 
     def set_settings(self, values: dict) -> dict:
         if "use_gpu" in values:
@@ -248,7 +249,31 @@ class Api(SystemApi, LlmApi, SearchApi):
                 asr.set_setting(key, bool(values[key]))
         if values.get("language") in asr.LANGUAGES:
             asr.set_setting("language", values["language"])
+        if "update_check" in values:
+            asr.set_setting("update_check", bool(values["update_check"]))
         return self.get_settings()
+
+    # ---------------- version and updates ----------------
+    def get_app_info(self) -> dict:
+        return {"version": version.VERSION, "edition": version.edition()}
+
+    def check_update(self, force: bool = False, lang: str = "tr") -> dict:
+        updater.check(bool(force))
+        return updater.status(lang)
+
+    def update_status(self, lang: str = "tr") -> dict:
+        return updater.status(lang)
+
+    def download_update(self, lang: str = "tr") -> dict:
+        updater.download()
+        return updater.status(lang)
+
+    def snooze_update(self) -> dict:
+        return updater.snooze()
+
+    def install_update(self) -> dict:
+        """Runs the downloaded setup after this window closes; the setup starts the new version."""
+        return updater.install(lambda: self._window().destroy())
 
     # ---------------- meeting analysis ----------------
     def analyze_job(self, job_id: str) -> dict:

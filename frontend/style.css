@@ -364,3 +364,13 @@ header .langwrap #langSel { padding-left:30px; }
 .phead { display:flex; align-items:center; gap:4px; }
 .pani { width:56px; height:56px; margin:-12px -6px -12px -14px; flex:none; }
 #progress.paused .pani { visibility:hidden; }
+
+/* update banner (updater.js) */
+.updbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 24px; background:var(--s0); border-bottom:1px solid var(--line); font-size:14px; }
+.updbar .updic .ic { width:18px; height:18px; vertical-align:-4px; color:var(--accent); }
+.updbar .updmsg { flex:1 1 280px; }
+.updbar .updnotes summary { cursor:pointer; color:var(--accent); }
+.updbar .updnotes div { white-space:pre-line; margin-top:4px; max-width:640px; }
+.updbar .updbarfill { flex:0 0 200px; margin:0; }
+.updbar .updfill { height:100%; background:var(--accent); transition:width .4s; }
+.updbar .updnotes { order:5; flex-basis:100%; }

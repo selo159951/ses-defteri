@@ -82,6 +82,16 @@ Her şey çevrimdışı çalışır. Tek istisna kapatılabilir güncelleme kont
 ## Aşama 1: Sürüm bilgisi, imza, güncelleme sistemi (Ana + Basit)
 Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden alır.
 
+**Durum (2026-11-21, Ana Sürüm):**
+- [x] 1a sürüm ve baskı: `backend/version.py`, `tools/set_version.py`, `edition.txt` derlemede yazılır, Hakkında'da "Sürüm 1.3.0 · Standart" görünür.
+- [x] 1b imza: sertifika oluşturuldu (parmak izi `8032931C62F4F826CF46A2566FCCBBE05130D6F3`, `version.py`'de). `tools/sign.ps1` derlemede exe ve setup'ları imzalar. Gerçek dosyada denendi: bizim imza geçer, 1 bayt değişen dosya `HashMismatch` ile reddedilir, başkasının imzası reddedilir.
+- [ ] **Kullanıcı yapacak:** `.\tools\backup_cert.ps1` ile sertifika yedeği (parolayı kendisi girer). Sertifika kaybolursa kurulu programlar sonraki güncellemeleri reddeder.
+- [x] 1c güncelleyici: `backend/updater.py`, köprü metodları, `frontend/updater.js` şeridi, `tests/test_updater.py` (29 test). Uygulamada sahte sunucuyla (`SESDEFTERI_UPDATE_URL`) denendi: şerit çıktı → indirdi → doğruladı → "hazır". "Kur ve yeniden başlat" gerçek kurulumla Aşama 6'da denenecek.
+- [x] Inno: `AppMutex=SesDefteriMutex` (`app.py` oluşturur), sessiz kurulumdan sonra açılış (`Check: WizardSilent`), sürüm `/DAppVersion` ile.
+- [x] Site: `site/ses-defteri/index.html` + `logo.svg`, `tools/make_release_json.py` → `surum.json`.
+- [ ] Ayarlar'da "otomatik denetle" anahtarı ve "Şimdi denetle" düğmesi → Aşama 2'de (arka uç hazır: ayar `update_check`, `window.updater.check(true)`).
+- [ ] Basit Sürüm'e aktarma → Aşama 5.
+
 **1a. Sürüm ve baskı tek yerden**
 - `backend/version.py`: `VERSION = "1.3.0"`.
 - Baskı bilgisi `edition()` ile okunur: `_MEIPASS/edition.txt` dosyasından (`standart` / `nvidia` / `basit`). Geliştirme ortamında `dev` döner.

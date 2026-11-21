@@ -28,6 +28,7 @@
   <button id="aboutBtn" class="icon" data-icon="info" data-i18n-title="about_title"></button>
   <button id="sysBtn" data-icon="cpu" data-i18n="system">Sistem</button>
 </header>
+<div id="updBar" class="updbar" role="status" aria-live="polite" hidden></div>
 
 <main id="home">
   <div id="drop" tabindex="0">
@@ -208,6 +209,7 @@
 <dialog id="aboutDlg">
   <h3 class="abouthead"><img src="logo.svg" alt="" width="40" height="40"><span data-i18n="app"></span></h3>
   <p class="hint" data-i18n="about_desc"></p>
+  <p class="hint" id="aboutVer"></p>
   <table class="creditTable">
     <tr><td data-i18n="idea"></td><td>Umut Akbaş</td></tr>
     <tr><td data-i18n="developer"></td><td><a href="https://selimoguz.com.tr" class="ext">Selim Oğuz</a> <span data-i18n="and"></span> Claude</td></tr>
@@ -222,5 +224,6 @@
 <script src="people.js"></script>
 <script src="analysis.js"></script>
 <script src="tour.js"></script>
+<script src="updater.js"></script>
 </body>
 </html>

@@ -872,6 +872,7 @@ function setLang(l, persist = true) {
   if (gpuState) showGpu(gpuState);
   if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
+  window.dispatchEvent(new Event("langchange"));
 }
 $("langSel").onchange = (e) => setLang(e.target.value);
 $("aboutBtn").onclick = () => $("aboutDlg").showModal();
