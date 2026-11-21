@@ -8,7 +8,7 @@ $py = Join-Path $PSScriptRoot "..\Ana Sürüm\.venv\Scripts"
 $version = (& "$py\python.exe" tools\set_version.py).Trim()
 & "$py\python.exe" -m PyInstaller --noconfirm --clean SesDefteri.spec
 # which package this is: the updater downloads the same edition
-Set-Content -Encoding ascii -NoNewline dist\SesDefteri\_internal\edition.txt "basit"
+[IO.File]::WriteAllText((Join-Path $PWD dist\SesDefteri\_internal\edition.txt), "basit")  # Set-Content silently wrote nothing here
 # "Selim Oğuz" signature; the updater only installs setups signed by it
 & .\tools\sign.ps1 dist\SesDefteri\SesDefteri.exe
 # the Visual C++ runtime must be inside the package (a PC without the redistributable still has to work)
