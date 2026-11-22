@@ -16,7 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
-from . import chatdb
+from . import chatdb, chats
 
 CREDITS = {"tr": "Ses Defteri'nin fikir babası Umut Akbaş, geliştiricisi Selim Oğuz'dur (Claude ile birlikte).",
            "en": "Ses Defteri was thought up by Umut Akbaş and developed by Selim Oğuz (together with Claude)."}
@@ -75,6 +75,32 @@ def small_talk(question: str, lang: str) -> str | None:
     # the last part decides: "selam nasılsın" -> how are you
     last = next((text for pat, text in _SMALL_TALK if re.search(rf"(?:^| )(?:{pat})$", q)), _SMALL_TALK[0][1])
     return last[lang]
+
+
+def make_title(question: str, answer: str, lang: str = "tr", generate=None) -> str:
+    """A short title for a saved conversation, written by the model in the question's language.
+    Small talk is not worth a model call; any problem falls back to the first words of the question."""
+    lang = lang if lang in TEXT else "tr"
+    if small_talk(question, lang) is not None:
+        return chats.fallback_title(question)
+    if generate is None:
+        from . import llm
+
+        generate = llm.generate
+    system = ("Bu sohbet için 2-5 kelimelik kısa bir başlık üret. "
+              f"{'Türkçe' if lang == 'tr' else 'English'} yaz. Sadece başlığı yaz: tırnak işareti ve nokta olmadan.")
+    try:
+        out = str(generate(f"Soru: {question}\n\nCevap: {(answer or '')[:400]}", system=system,
+                           max_tokens=24, temperature=0.2))
+        out = out.strip().splitlines()[0].strip() if out.strip() else ""
+        out = re.sub(r"[*_`#>]+", "", out).strip().strip("\"'“”‘’").strip().rstrip(" .,!?…:;").strip()
+        if out:
+            return out[:chats.TITLE_MAX].rstrip(" .,!?…:;").strip()
+    except Exception:
+        pass  # a title is a bonus: the question's first words are always there
+    return chats.fallback_title(question)
+
+
 DAYS_TR = ["pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "pazar"]
 DAYS_EN = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 MONTHS_TR = ["ocak", "subat", "mart", "nisan", "mayis", "haziran", "temmuz", "agustos", "eylul", "ekim", "kasim", "aralik"]

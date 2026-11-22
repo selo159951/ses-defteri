@@ -470,6 +470,79 @@ class Api(SystemApi, LlmApi, SearchApi):
             ev.set()
         return {"ok": True}
 
+    # ---------------- saved assistant conversations ----------------
+    def chat_list(self) -> list[dict]:
+        from . import chats
+
+        return chats.list_chats()
+
+    def chat_get(self, chat_id: str) -> dict:
+        from . import chats
+
+        if not isinstance(chat_id, str):
+            return {"error": "bad_id"}
+        chat = chats.get(chat_id)
+        return chat if chat is not None else {"error": "not_found"}
+
+    def chat_save(self, chat_id: str | None, msgs: list, history: list, title_hint: str = "") -> dict:
+        """The page sends the whole conversation after every answer; a missing/unknown id starts a new one."""
+        from . import chats
+
+        if not (msgs is None or isinstance(msgs, list)) or not (history is None or isinstance(history, list)):
+            return {"error": "bad_msgs"}
+        if title_hint is None:
+            title_hint = ""
+        if not isinstance(title_hint, str):
+            return {"error": "bad_title"}
+        try:
+            return chats.save(chat_id if isinstance(chat_id, str) else None, msgs or [], history or [], title_hint)
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def chat_rename(self, chat_id: str, title: str) -> dict:
+        from . import chats
+
+        if not isinstance(chat_id, str) or not isinstance(title, str):
+            return {"error": "bad_args"}
+        try:
+            out = chats.rename(chat_id, title)
+            return out if out is not None else {"error": "not_found"}
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def chat_delete(self, chat_id: str) -> dict:
+        from . import chats
+
+        if not isinstance(chat_id, str):
+            return {"error": "bad_id"}
+        try:
+            return {"ok": chats.delete(chat_id)}
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def chat_autotitle(self, chat_id: str, question: str, answer: str, lang: str = "tr") -> dict:
+        """The model names a conversation nobody has named yet. A manual rename, a missing model or a
+        running transcription keeps the fallback title (from the first words of the question)."""
+        from . import chat, chats
+        from .analysis import llm_ready
+
+        if not isinstance(chat_id, str) or not isinstance(question, str) or not isinstance(answer, str):
+            return {"error": "bad_args"}
+        try:
+            saved = chats.get(chat_id)
+            if saved is None:
+                return {"error": "not_found"}
+            if not saved.get("auto_title"):
+                return {"title": saved.get("title") or ""}
+            if not llm_ready() or pipeline._current["id"]:
+                title = chats.fallback_title(question)
+            else:
+                title = chat.make_title(question, answer, lang)
+            out = chats.set_auto_title(chat_id, title)
+            return {"title": (out or {}).get("title") or chats.fallback_title(question)}
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
     # ---------------- version and updates ----------------
     def get_app_info(self) -> dict:
         return {"version": version.VERSION, "edition": version.edition()}
