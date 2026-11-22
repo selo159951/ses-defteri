@@ -36,7 +36,7 @@ The files are signed as "Selim Oğuz" with a self-made certificate. Windows does
 - **Chapters**: long meetings are split into titled sections; click one to jump there
 - **Noise cleanup** (offline): for a noisy recording, listen to a short excerpt original vs cleaned and pick one; the app learns the noise limit from the choices
 - **Folder watch** (optional): new recordings in a chosen folder are processed by themselves
-- Pause / resume / cancel, several files in a queue, a first-run guided tour (**Guide** button to replay it)
+- Pause / resume / cancel, several files in a queue, a first-run guided tour (replay it from the About (i) dialog)
 - Export the **Analysis** as Word / TXT / Markdown / JSON
 - **Record a meeting in the app**: the computer's sound (Teams, Meet, Zoom…) and the microphone together; written to disk as it records, so a crash loses nothing. Optional **live text** while recording (turn it off any time; it stops by itself when the PC cannot keep up)
 - **Assistant**: ask about your meetings in plain words ("What did Ahmet say about the app last week?"); answered on this PC by the meeting-mode model, with clickable sources, "not found" instead of guessing. People can have a title and a note

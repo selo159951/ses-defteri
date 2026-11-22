@@ -9,6 +9,11 @@
       "size": 162462048,
       "sha256": "58ee7c59bf738f64c19322ce0f10797764640f28a145e1ed23312616cdefb77c"
     },
+    "nvidia": {
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-NVIDIA-Setup.exe",
+      "size": 1184625040,
+      "sha256": "50140d3375d6e8e18e1f4d492d09704fe6ace10ad5a814e8211db9572b46661c"
+    },
     "basit": {
       "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Basit-Setup.exe",
       "size": 147372840,

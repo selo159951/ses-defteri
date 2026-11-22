@@ -250,7 +250,7 @@
     whenHomeVisible(() => setTimeout(() => start("home"), 250));
   };
   // the About dialog button and the header "Guide" button both start the tour again
-  for (const id of ["tourRestart", "guideBtn"]) { const b = document.getElementById(id); if (b) b.onclick = again; }
+  const b = document.getElementById("tourRestart"); if (b) b.onclick = again;  // in the About (i) dialog
 
   init();
 })();
