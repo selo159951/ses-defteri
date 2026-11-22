@@ -39,6 +39,10 @@
     container.classList.remove("fadein");
     void container.offsetWidth; // restart the animation
     container.classList.add("fadein");
+    // only this once: left on, every later redraw (the list refreshes each second while a recording is processed)
+    // would fade in again, in a loop
+    clearTimeout(container._fadeT);
+    container._fadeT = setTimeout(() => container.classList.remove("fadein"), 700);
   };
   window.emptyState = (icon, title, text, button) => {
     const d = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
