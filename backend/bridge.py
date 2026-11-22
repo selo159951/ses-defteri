@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -63,6 +64,20 @@ def _job(job_id: str) -> dict:
         return store.read_transcript(job_id)
     except (FileNotFoundError, ValueError):
         raise ValueError("job not found") from None
+
+
+ZOOM_MIN, ZOOM_MAX = 0.7, 2.0
+
+
+def clamp_zoom(z) -> float:
+    try:
+        return round(min(ZOOM_MAX, max(ZOOM_MIN, float(z))), 2)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def ui_zoom() -> float:
+    return clamp_zoom(asr.get_settings().get("ui_zoom", 1.0))
 
 
 class Api(SystemApi, LlmApi, SearchApi):
@@ -229,13 +244,16 @@ class Api(SystemApi, LlmApi, SearchApi):
                 "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
                 "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
-                "update_check": updater.enabled(), **self._rec_settings()}
+                "update_check": updater.enabled(), "ui_zoom": ui_zoom(), **self._rec_settings()}
 
     def set_settings(self, values: dict) -> dict:
         if "use_gpu" in values:
             asr.set_use_gpu(bool(values["use_gpu"]))
         if values.get("ui_lang") in ("tr", "en"):
             asr.set_setting("ui_lang", values["ui_lang"])
+        if "ui_zoom" in values:
+            asr.set_setting("ui_zoom", clamp_zoom(values["ui_zoom"]))
+            self.apply_zoom()
         if "meeting_mode" in values:
             asr.set_setting("meeting_mode", bool(values["meeting_mode"]))
         if "learn_people" in values:
@@ -261,6 +279,36 @@ class Api(SystemApi, LlmApi, SearchApi):
     # ---------------- meeting recording (computer sound + microphone) ----------------
     LIVE_TEXT = True  # the simple edition has no live text
     SIMPLE = False    # the simple edition: short minutes without analysis
+
+    def apply_zoom(self, z: float | None = None) -> None:
+        """Interface size: WebView2's own zoom (like Ctrl + / - in a browser), so the layout stays right."""
+        win = self._get_window() if self._get_window else None
+        wv = getattr(getattr(getattr(win, "native", None), "browser", None), "webview", None)
+        if wv is None:
+            return
+        z = ui_zoom() if z is None else z
+        try:
+            from System import Action  # pythonnet: WinForms controls must be touched on their own thread
+
+            wv.Invoke(Action(lambda: setattr(wv, "ZoomFactor", z)))
+        except Exception as e:
+            print("zoom:", e, file=sys.stderr)
+
+    def watch_zoom(self) -> None:
+        """Ctrl + mouse wheel changes the zoom too: remember it."""
+        win = self._get_window() if self._get_window else None
+        wv = getattr(getattr(getattr(win, "native", None), "browser", None), "webview", None)
+        if wv is None:
+            return
+
+        def changed(sender, _args):
+            z = clamp_zoom(sender.ZoomFactor)
+            if abs(z - ui_zoom()) > 0.001:
+                asr.set_setting("ui_zoom", z)
+        try:
+            wv.ZoomFactorChanged += changed
+        except Exception as e:
+            print("zoom watch:", e, file=sys.stderr)
 
     def _rec_settings(self) -> dict:
         s = asr.get_settings()

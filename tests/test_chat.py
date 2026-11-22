@@ -175,7 +175,7 @@ def test_unknown_person_finds_nothing(data):
 def test_off_topic_is_refused_without_search(data):
     llm = FakeLLM({"niyet": "kapsam_disi", "tur": "genel", "kisiler": [], "anahtar": []})
     r = chat.ask("Bana bir şiir yaz", generate=llm, people=[], now=NOW)
-    assert r["answer"].startswith("Ben yalnızca") and len(llm.calls) == 1
+    assert r["answer"].startswith("Bu konuda yardımcı olamıyorum") and len(llm.calls) == 1
 
 
 def test_app_question_uses_fixed_facts(data):
@@ -255,3 +255,40 @@ def test_made_up_words_fall_back_to_the_persons_lines(data):
 def test_made_up_words_without_person_or_date_find_nothing(data):
     llm = FakeLLM({"niyet": "kayit", "tur": "genel", "kisiler": [], "anahtar": ["helikopter"]})
     assert not chat.ask("helikopter?", generate=llm, people=[], now=NOW)["found"]
+
+
+# ---------------------------------------------------------------- small talk, vague questions, empty days
+@pytest.mark.parametrize("q,start", [("Selam", "Merhaba"), ("selam, nasılsın?", "İyiyim"), ("Teşekkürler!", "Rica"),
+                                     ("sağ ol", "Rica"), ("tamam", "Tamam")])
+def test_small_talk_needs_no_model(q, start):
+    llm = FakeLLM({})
+    r = chat.ask(q, generate=llm, people=[], now=NOW)
+    assert r["answer"].startswith(start) and llm.calls == []
+
+
+def test_small_talk_does_not_swallow_questions():
+    assert chat.small_talk("selam, dün ne konuştuk?", "tr") is None
+    assert chat.small_talk("teşekkürler, kararlar neydi", "tr") is None
+
+
+def test_vague_question_asks_back(data):
+    llm = FakeLLM({"niyet": "kayit", "tur": "genel", "kisiler": [], "anahtar": ["toplantı"]})
+    r = chat.ask("bir şey sorcam", generate=llm, people=[], now=NOW)
+    assert r["answer"].startswith("Hangi toplantıyı") and len(llm.calls) == 1
+
+
+def test_day_without_recordings_names_the_nearest(data):
+    llm = FakeLLM({"niyet": "kayit", "tur": "ozet", "kisiler": [], "anahtar": []})
+    r = chat.ask("3 ocakta ne konuşuldu", generate=llm, people=[], now=NOW)
+    assert "kayıt yok" in r["answer"] and "En yakın kayıtlar" in r["answer"] and len(llm.calls) == 1
+
+
+def test_old_dates_are_not_carried_to_an_unrelated_question(data):
+    llm = FakeLLM({"niyet": "kayit", "tur": "genel", "kisiler": [], "anahtar": []})
+    hist = [{"q": "dün ne konuştuk", "range": "x", "range_ts": [0, 1]}]
+    r = chat.ask("hmm", hist, generate=llm, people=[], now=NOW)
+    assert r["answer"].startswith("Hangi toplantıyı")
+
+
+def test_month_names_are_not_search_words():
+    assert chat.clean_words(["kasım", "bütçe"], []) == ["bütçe"]

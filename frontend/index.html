@@ -20,15 +20,23 @@
 <script src="splash.js"></script>
 <script src="icons.js"></script>
 <script src="skeleton.js"></script>
-<header><img class="hlogo" src="logo.svg" alt="" width="28" height="28"><h1 data-i18n="app">Ses Defteri</h1><button id="homeBtn" hidden data-icon="arrow-left" data-i18n="all_recordings"></button>
-  <span class="spacer"></span>
-  <button id="assistantBtn" data-icon="message-circle" data-i18n="assistant"></button>
-  <button id="peopleBtn" data-icon="users" data-i18n="people"></button>
-  <button id="settingsBtn" data-icon="sliders" data-i18n="settings"></button>
-  <span class="langwrap"><span class="langic" data-icon="globe" aria-hidden="true"></span><select id="langSel" data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select></span>
-  <button id="aboutBtn" class="icon" data-icon="info" data-i18n-title="about_title"></button>
-  <button id="sysBtn" data-icon="cpu" data-i18n="system">Sistem</button>
-</header>
+<aside id="sidenav" aria-label="Menü">
+  <div class="navtop">
+    <button id="navToggle" type="button" class="navham" data-icon="menu" data-i18n-title="menu"></button>
+    <img class="hlogo" src="logo.svg" alt="" width="28" height="28"><h1 data-i18n="app">Ses Defteri</h1>
+  </div>
+  <nav class="navitems">
+    <button id="homeBtn" class="navitem" data-icon="folder" data-i18n="all_recordings"></button>
+    <button id="assistantBtn" class="navitem" data-icon="message-circle" data-i18n="assistant"></button>
+    <button id="peopleBtn" class="navitem" data-icon="users" data-i18n="people"></button>
+    <button id="settingsBtn" class="navitem" data-icon="sliders" data-i18n="settings"></button>
+    <button id="sysBtn" class="navitem" data-icon="cpu" data-i18n="system">Sistem</button>
+  </nav>
+  <div class="navbottom">
+    <span class="langwrap"><span class="langic" data-icon="globe" aria-hidden="true"></span><select id="langSel" data-i18n-title="language"><option value="tr">TR</option><option value="en">EN</option></select></span>
+    <button id="aboutBtn" class="navitem" data-icon="info" data-i18n="about" data-i18n-title="about_title"></button>
+  </div>
+</aside>
 <div id="updBar" class="updbar" role="status" aria-live="polite" hidden></div>
 <div id="recBar" class="recbar" role="region" aria-live="polite" hidden></div>
 
@@ -223,8 +231,13 @@
   <p><button id="tourRestart" type="button" data-icon="refresh" data-i18n="tour_restart"></button></p>
   <form method="dialog"><button data-i18n="close"></button></form>
 </dialog>
+<dialog id="glossDlg" class="glossdlg">
+  <div id="glossBody"></div>
+  <form method="dialog"><button data-i18n="close"></button></form>
+</dialog>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
+<script src="nav.js"></script>
 <script src="search.js"></script>
 <script src="system.js"></script>
 <script src="people.js"></script>

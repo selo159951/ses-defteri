@@ -63,7 +63,9 @@ def main():
     def on_loaded():
         if not attached:  # the page is loaded once; register the drop handler once
             attach_file_drop(window, api)
+            api.watch_zoom()  # Ctrl + mouse wheel is remembered
             attached.append(True)
+        api.apply_zoom()  # the interface size from Settings
 
     window.events.loaded += on_loaded
     try:

@@ -233,6 +233,21 @@ def context(job_id: str, seg: int, around: int = 1) -> list[dict]:
     return [{"seg": r[0], "start": r[1], "speaker": r[2], "text": r[3]} for r in rows]
 
 
+def recording_dates(date_from: float | None = None, date_to: float | None = None, near: float | None = None,
+                    limit: int = 3) -> list[float]:
+    """Start times of recordings in a range; with `near`, the ones closest to that moment."""
+    with _lock:
+        c = connect()
+        try:
+            if near is not None:
+                q = "SELECT created FROM jobs ORDER BY ABS(created - ?) LIMIT ?"
+                return [r[0] for r in c.execute(q, (near, limit))]
+            q = "SELECT created FROM jobs WHERE created >= ? AND created < ? ORDER BY created LIMIT ?"
+            return [r[0] for r in c.execute(q, (date_from or 0, date_to or 1e12, limit))]
+        finally:
+            c.close()
+
+
 def counts() -> dict:
     with _lock:
         c = connect()

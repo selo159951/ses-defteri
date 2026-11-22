@@ -35,13 +35,46 @@ APP_FACTS = {
            + CREDITS["en"]),
 }
 TEXT = {
-    "tr": {"off_topic": "Ben yalnızca toplantı kayıtlarınız ve Ses Defteri hakkında yardımcı olabilirim.",
+    "tr": {"off_topic": "Bu konuda yardımcı olamıyorum; ben toplantı kayıtlarınızı ve Ses Defteri'ni biliyorum. "
+                        "Şöyle sorabilirsiniz: \"Dünkü toplantıda neler konuşuldu?\", \"Geçen hafta hangi kararlar alındı?\", "
+                        "\"Ahmet fiyat hakkında ne dedi?\"",
            "not_found": "Bu soruya uyan bir kayıt bulamadım{when}.", "when": " ({r})",
+           "no_rec_in_range": "{r} tarihinde kayıt yok.", "nearest": " En yakın kayıtlar: {d}.",
+           "vague": "Hangi toplantıyı, kişiyi ya da konuyu soruyorsunuz? Örneğin: \"Bugünkü toplantının özeti\", "
+                    "\"Geçen hafta Ahmet ne dedi?\", \"Fiyat artışı hakkında neler konuşuldu?\"",
            "no_records": "Henüz metne çevrilmiş bir kayıt yok."},
-    "en": {"off_topic": "I can only help with your meeting recordings and with Ses Defteri.",
+    "en": {"off_topic": "I can't help with that; I know your meeting recordings and Ses Defteri. Try: \"What did we "
+                        "discuss yesterday?\", \"Which decisions were made last week?\", \"What did Ahmet say about the price?\"",
            "not_found": "I could not find a recording that matches{when}.", "when": " ({r})",
+           "no_rec_in_range": "There is no recording on {r}.", "nearest": " Nearest recordings: {d}.",
+           "vague": "Which meeting, person or topic do you mean? For example: \"Summary of today's meeting\", "
+                    "\"What did Ahmet say last week?\", \"What was said about the price rise?\"",
            "no_records": "There are no transcribed recordings yet."},
 }
+# greetings, thanks, "how are you": answered at once, without the model (folded text, whole message)
+_SMALL_TALK = [
+    (r"(selam(lar)?|merhaba(lar)?|sa|slm|mrb|iyi (gunler|aksamlar|sabahlar)|gunaydin|hey|hi|hello|good (morning|evening))",
+     {"tr": "Merhaba! Toplantılarınız hakkında ne öğrenmek istersiniz? Örneğin \"Dünkü toplantıda neler konuşuldu?\"",
+      "en": "Hello! What would you like to know about your meetings? For example \"What did we discuss yesterday?\""}),
+    (r"(nasilsin(iz)?|naber|ne haber|how are you)",
+     {"tr": "İyiyim, teşekkürler! Toplantılarınızla ilgili bir soru sorabilirsiniz.",
+      "en": "I'm fine, thanks! Ask me anything about your meetings."}),
+    (r"(tesekkur(ler| ederim)?|sag ?ol(un)?|eyvallah|tsk|tskler|thanks?( you)?|ty)",
+     {"tr": "Rica ederim! Başka bir sorunuz olursa buradayım.", "en": "You're welcome! I'm here if you need anything else."}),
+    (r"(tamam|ok|okay|peki|anladim|super|harika|guzel)",
+     {"tr": "Tamam. Başka bir şey sormak isterseniz yazabilirsiniz.", "en": "Okay. Ask me anything else whenever you like."}),
+]
+
+
+def small_talk(question: str, lang: str) -> str | None:
+    q = re.sub(r"[^\w\s]", " ", chatdb.fold(question)).strip()
+    q = re.sub(r"\s+", " ", q)
+    any_ = "|".join(p for p, _ in _SMALL_TALK)
+    if not q or not re.fullmatch(rf"(?:{any_})(?: (?:{any_}))*", q):  # "selam nasılsın" too, but not "selam, dün ne konuştuk"
+        return None
+    # the last part decides: "selam nasılsın" -> how are you
+    last = next((text for pat, text in _SMALL_TALK if re.search(rf"(?:^| )(?:{pat})$", q)), _SMALL_TALK[0][1])
+    return last[lang]
 DAYS_TR = ["pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "pazar"]
 DAYS_EN = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 MONTHS_TR = ["ocak", "subat", "mart", "nisan", "mayis", "haziran", "temmuz", "agustos", "eylul", "ekim", "kasim", "aralik"]
@@ -206,7 +239,7 @@ _STOP = {"ne", "neler", "nedir", "dedi", "demis", "demisti", "soyledi", "soylemi
          "gecen", "hafta", "haftaki", "ay", "kim", "kimin", "nasil", "neden", "what", "did", "say", "said", "about",
          "the", "meeting", "meetings", "last", "week", "today", "who", "which", "was", "were", "karar", "kararlar",
          "gorev", "gorevler", "soru", "sorular", "ozet", "konusma", "konusmalar", "soz", "sozler", "sozleri",
-         "dunku", "demek", "istedi", "anlatti"}
+         "dunku", "demek", "istedi", "anlatti"} | set(MONTHS_TR) | set(MONTHS_EN) | set(DAYS_TR) | set(DAYS_EN)
 
 
 def kind_of_question(question: str) -> str:
@@ -333,6 +366,9 @@ def ask(question: str, history: list[dict] | None = None, lang: str = "tr", gene
         from . import people as people_mod
 
         people = people_mod.list_people()
+    reply = small_talk(question, lang)
+    if reply:
+        return {"answer": reply, "sources": [], "found": True, "intent": {"niyet": "sohbet"}, "range": ""}
     chatdb.sync()
 
     system, prompt = intent_prompt(question, now.date(), people, history)
@@ -350,7 +386,8 @@ def ask(question: str, history: list[dict] | None = None, lang: str = "tr", gene
         return {"answer": tidy(str(text)), "sources": [], "found": True, "intent": intent, "range": ""}
 
     when = resolve_dates(question, now)
-    if not when:  # "and what about Umut?": keep the dates of the previous question
+    if not when and (intent["kisiler"] or intent["anahtar"]):
+        # "and what about Umut?": keep the dates of the previous question (only for a real follow-up)
         for h in reversed(history[-3:]):
             if h.get("range_ts"):
                 when = (h["range_ts"][0], h["range_ts"][1], h.get("range", ""))
@@ -358,7 +395,19 @@ def ask(question: str, history: list[dict] | None = None, lang: str = "tr", gene
     label = describe_range(when[0], when[1], lang) if when else ""
     if chatdb.counts()["recordings"] == 0:
         return {"answer": T["no_records"], "sources": [], "found": False, "intent": intent, "range": label}
+    if not (when or intent["kisiler"] or intent["anahtar"] or intent["tur"] != "genel"):
+        return {"answer": T["vague"], "sources": [], "found": False, "intent": intent, "range": ""}
+    if when and not chatdb.recording_dates(when[0], when[1], limit=1):
+        near = chatdb.recording_dates(near=(when[0] + when[1]) / 2)
+        days = ", ".join(dict.fromkeys(dt.date.fromtimestamp(t).strftime("%d.%m.%Y") for t in sorted(near)))
+        text = T["no_rec_in_range"].format(r=label) + (T["nearest"].format(d=days) if days else "")
+        return {"answer": text, "sources": [], "found": False, "intent": intent, "range": label,
+                "range_ts": [when[0], when[1]]}
     rows = gather(intent, when, semantic)
+    speakers = chatdb.people_in(intent["kisiler"]) if intent["kisiler"] else None
+    if not rows and when and speakers != []:  # recordings on those days, but no analysis / no matching word
+        rows = (None if speakers else chatdb.search(None, when[0], when[1], None, ["summary"], MAX_SOURCES)) \
+            or chatdb.search(None, when[0], when[1], speakers, ["line"], MAX_SOURCES)
     if not rows:
         return {"answer": T["not_found"].format(when=T["when"].format(r=label) if label else ""), "sources": [],
                 "found": False, "intent": intent, "range": label, "range_ts": [when[0], when[1]] if when else None}

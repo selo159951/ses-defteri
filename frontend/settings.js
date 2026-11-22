@@ -15,6 +15,8 @@
     set_template_off: "The built-in layout is used. Load your own Word file to use your company's layout.",
     set_template_help: "Write placeholders in curly brackets in your Word file, e.g. {date} as {tarih}, {summary} as {özet}, a paragraph with only {kararlar} for the decisions, and a table row with {görev.kim} {görev.ne} {görev.tarih} for the tasks. The sample template lists them all.",
     set_template_pick: "Load template…", set_template_sample: "Download sample template", set_template_remove: "Use built-in layout",
+    set_tab_view: "Appearance", set_tab_record: "Recording", set_tab_minutes: "Minutes", set_tab_updates: "Updates",
+    set_view: "View", set_zoom: "Interface size", set_zoom_default: "normal", set_zoom_note: "Makes text, buttons and boxes bigger or smaller. Ctrl + mouse wheel changes it too; the size is remembered.",
     set_updates: "Updates", set_update_auto: "Check for a new version when the app starts",
     set_update_note: "The only internet use of the app: it reads a small version file. No recording or text is ever sent.",
     set_update_now: "Check now", set_checking: "Checking…",
@@ -40,6 +42,8 @@
     set_template_off: "Yerleşik düzen kullanılıyor. Şirketinizin düzenini kullanmak için kendi Word dosyanızı yükleyin.",
     set_template_help: "Word dosyanıza süslü parantez içinde yer tutucular yazın: {tarih}, {özet}, {katılımcılar}; kararlar için tek başına {kararlar} yazılı bir paragraf; görevler için {görev.kim} {görev.ne} {görev.tarih} yazılı bir tablo satırı. Örnek şablonda hepsi listeli.",
     set_template_pick: "Şablon yükle…", set_template_sample: "Örnek şablonu indir", set_template_remove: "Yerleşik düzeni kullan",
+    set_tab_view: "Görünüm", set_tab_record: "Kayıt", set_tab_minutes: "Tutanak", set_tab_updates: "Güncelleme",
+    set_view: "Görünüm", set_zoom: "Arayüz boyutu", set_zoom_default: "normal", set_zoom_note: "Yazıları, düğmeleri ve kutuları büyütür ya da küçültür. Ctrl + fare tekerleğiyle de değişir; seçilen boyut hatırlanır.",
     set_updates: "Güncellemeler", set_update_auto: "Program açılırken yeni sürüm var mı diye bak",
     set_update_note: "Programın tek internet kullanımı budur: küçük bir sürüm dosyası okunur. Hiçbir kayıt ya da metin gönderilmez.",
     set_update_now: "Şimdi denetle", set_checking: "Bakılıyor…",
@@ -174,6 +178,21 @@
     return card(t("set_record"), ...kids);
   }
 
+  function viewCard() {
+    const cur = Number(S.settings.ui_zoom) || 1;
+    const sizes = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75];
+    if (!sizes.some((z) => Math.abs(z - cur) < 0.01)) sizes.push(cur);  // set with Ctrl + mouse wheel
+    const sel = el("select", { id: "setZoom" }, ...sizes.sort((a, b) => a - b).map((z) =>
+      el("option", { value: String(z), textContent: `%${Math.round(z * 100)}` + (z === 1 ? ` (${t("set_zoom_default")})` : ""), selected: Math.abs(z - cur) < 0.01 })));
+    sel.onchange = async () => {
+      try { S.settings = await call("set_settings", { ui_zoom: Number(sel.value) }); toast(t("set_saved")); }
+      catch (e) { toast(t("set_failed", { e: msg(e) })); }
+    };
+    return card(t("set_view"),
+      el("label", { className: "frow" }, el("span", { textContent: t("set_zoom") }), sel),
+      el("p", { className: "sline dim", textContent: t("set_zoom_note") }));
+  }
+
   function updateCard() {
     const auto = el("input", { type: "checkbox", id: "setUpdAuto", checked: S.settings.update_check !== false });
     auto.onchange = async () => {
@@ -199,9 +218,23 @@
 
   function draw() {
     // the simple edition keeps it short: recording, company name / logo, updates
-    const cards = window.SIMPLE_EDITION ? [recordCard(), companyCard(), updateCard()]
-      : [recordCard(), companyCard(), minutesCard(), templateCard(), updateCard()];
-    root.replaceChildren(el("h2", { textContent: t("set_title") }), ...cards);
+    // tabs on the left, one topic at a time on the right
+    const tabs = [
+      ["view", "eye", "set_tab_view", () => [viewCard()]],
+      ["record", "mic", "set_tab_record", () => [recordCard()]],
+      ["minutes", "file-text", "set_tab_minutes", () => window.SIMPLE_EDITION ? [companyCard()] : [companyCard(), minutesCard(), templateCard()]],
+      ["updates", "refresh", "set_tab_updates", () => [updateCard()]],
+    ];
+    if (!tabs.some(([id]) => id === S.tab)) S.tab = "view";
+    const nav = el("nav", { className: "stabs", role: "tablist" }, ...tabs.map(([id, icon, key]) => {
+      const b = el("button", { type: "button", role: "tab", className: "stab" + (id === S.tab ? " on" : ""), textContent: t(key),
+        onclick: () => { S.tab = id; draw(); } });
+      b.setAttribute("aria-selected", String(id === S.tab));
+      b.dataset.icon = icon;
+      return b;
+    }));
+    const body = el("div", { className: "sbody", role: "tabpanel" }, ...tabs.find(([id]) => id === S.tab)[3]());
+    root.replaceChildren(el("h2", { textContent: t("set_title") }), el("div", { className: "slayout" }, nav, body));
     hydrateIcons(root);
   }
 })();

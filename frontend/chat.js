@@ -95,7 +95,9 @@
     kids.push(log, el("div", { className: "astin" }, input, send), el("p", { className: "hint astnote", textContent: t("ast_note") }));
     root.replaceChildren(...kids);
     hydrateIcons(root);
-    log.scrollTop = log.scrollHeight;
+    // after layout (icons, wrapped text): the newest message at the bottom of the log, and the log in view
+    const down = () => { log.scrollTop = log.scrollHeight; log.lastElementChild?.scrollIntoView({ block: "nearest" }); };
+    down(); requestAnimationFrame(down);
   }
 
   async function ask(q) {

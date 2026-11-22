@@ -113,18 +113,62 @@ def read_pcm(path: Path) -> np.ndarray:
     return np.frombuffer(data, "<i2").astype(np.float32) / 32768.0
 
 
+FRAME = 320  # 20 ms at 16 kHz
+
+
+def frame_rms(x: np.ndarray, n_frames: int) -> np.ndarray:
+    y = np.zeros(n_frames * FRAME, np.float64)
+    y[: min(len(x), len(y))] = x[: len(y)]
+    return np.sqrt(np.mean(y.reshape(n_frames, FRAME) ** 2, axis=1))
+
+
+def speech_level(r: np.ndarray) -> float:
+    """How loud the talking is (not the average with all the silence in it)."""
+    floor = max(1e-4, 3 * float(np.percentile(r, 20))) if len(r) else 1e-4
+    active = r[r > floor]
+    return float(np.percentile(active, 90)) if len(active) else 0.0
+
+
 def mix(tracks: list[np.ndarray]) -> np.ndarray:
-    """Sum the tracks (padded to the longest), each brought to a similar loudness so a quiet microphone is not lost
-    under the meeting app's sound, then keep the peak under 0.95."""
-    tracks = [t for t in tracks if len(t)]
-    if not tracks:
+    """tracks = [system, mic] (either may be empty). Each is brought to a similar speech loudness (at most 4x), then
+    the microphone is kept only where it carries its own voice: its room noise is turned down, and while the
+    computer plays sound the microphone is turned down unless it is clearly louder than that sound - a laptop
+    microphone also hears the laptop speakers, and that echo, lifted, blurred the speakers together (one person
+    for the whole meeting). The peak is kept under 0.95."""
+    present = [t for t in tracks if len(t)]
+    if not present:
         return np.zeros(0, np.float32)
-    n = max(len(t) for t in tracks)
-    out = np.zeros(n, np.float32)
+    n = max(len(t) for t in present)
+    nf = (n + FRAME - 1) // FRAME
+    out = np.zeros(nf * FRAME, np.float32)
+    lifted = []
     for t in tracks:
-        rms = float(np.sqrt(np.mean(t.astype(np.float64) ** 2))) if len(t) else 0.0
-        gain = min(8.0, 0.08 / rms) if rms > 1e-4 else 1.0  # very quiet track: lift, never more than 8x
-        out[: len(t)] += t * gain
+        if not len(t):
+            lifted.append(None)
+            continue
+        lvl = speech_level(frame_rms(t, nf))
+        gain = min(4.0, 0.25 / lvl) if lvl > 1e-4 else 1.0
+        y = np.zeros(nf * FRAME, np.float32)
+        y[: len(t)] = t * gain
+        lifted.append(y)
+    system = lifted[0] if lifted else None
+    mic = lifted[1] if len(lifted) > 1 else None
+    if mic is not None:
+        m = frame_rms(mic, nf)
+        keep = m > 3 * max(float(np.percentile(m, 20)), 1e-4)  # above its own room noise
+        if system is not None:
+            s = frame_rms(system, nf)
+            keep &= ~((s > 0.02) & (m < 1.5 * s))  # only the speakers' sound coming back in
+        g = np.where(keep, 1.0, 0.1)
+        g = np.convolve(g, np.ones(7) / 7, mode="same")  # no clicks at the edges
+        mic *= np.repeat(g, FRAME).astype(np.float32)
+    for y in (system, mic):
+        if y is not None:
+            out += y
+    for y in lifted[2:]:
+        if y is not None:
+            out += y
+    out = out[:n]
     peak = float(np.abs(out).max()) if n else 0.0
     if peak > 0.95:
         out *= 0.95 / peak

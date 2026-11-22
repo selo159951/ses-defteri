@@ -80,13 +80,31 @@
       ? el("button", { className: "small" }, icText("check", t("confirm_all")))
       : null;
     if (confirmAll) confirmAll.onclick = () => confirmAllPeople(unconfirmed);
+    // the glossary lives in a pop-up: the page stays about people
+    const nTerms = (S.gloss?.terms?.length || 0) + (S.gloss?.fixes?.length || 0);
+    const glossBtn = hasGlossary() && S.gloss
+      ? el("button", { title: t("glossary_title") }, icText("book-open", t("glossary_btn") + (nTerms ? ` (${nTerms})` : "")))
+      : null;
+    if (glossBtn) glossBtn.onclick = openGlossary;
     root.replaceChildren(
       el("div", { className: "toolbar" }, el("h2", { textContent: t("people") }), el("span", { className: "spacer" }),
-        ...(confirmAll ? [confirmAll] : []), addPanel()),
+        ...(glossBtn ? [glossBtn] : []), ...(confirmAll ? [confirmAll] : []), addPanel()),
       el("p", { className: "hint", textContent: t("people_hint") }),
       ...(S.error ? [el("p", { className: "perr", textContent: S.error })] : []),
-      ...(cards.length ? cards : [el("p", { className: "hint", textContent: t("no_people") })]),
-      ...glossarySection());
+      ...(cards.length ? cards : [el("p", { className: "hint", textContent: t("no_people") })]));
+  }
+
+  function openGlossary() {
+    drawGlossary();
+    const d = $("glossDlg");
+    d.onclose = () => draw();  // the button shows the new count
+    if (!d.open) d.showModal();
+  }
+  function drawGlossary() {
+    const body = $("glossBody");
+    body.replaceChildren(...glossarySection(),
+      ...(S.error ? [el("p", { className: "perr", textContent: S.error })] : []));
+    hydrateIcons(body);
   }
 
   /* ---------- glossary ---------- */
@@ -106,11 +124,11 @@
         saved.textContent = t("saved_g");
         setTimeout(() => { saved.textContent = ""; }, 2000);
         terms.value = (S.gloss.terms || []).join("\n");
-      } else draw();
+      } else drawGlossary();
     };
     const fixes = (S.gloss.fixes || []).map((f) => {
       const rm = el("button", { className: "icon", title: t("fix_remove") }, ic("trash"));
-      rm.onclick = async () => { await gloss("remove_glossary_fix", f.wrong); draw(); };
+      rm.onclick = async () => { await gloss("remove_glossary_fix", f.wrong); drawGlossary(); };
       return el("div", { className: "prow gfix" },
         el("span", { className: "gwrong", textContent: f.wrong }), ic("arrow-right"),
         el("span", { className: "gright", textContent: f.right }),
@@ -122,7 +140,7 @@
     const add = el("button", { textContent: t("fix_add") });
     add.onclick = async () => {
       if (!wrong.value.trim() || !right.value.trim()) { (wrong.value.trim() ? right : wrong).focus(); return; }
-      await gloss("add_glossary_fix", wrong.value.trim(), right.value.trim()); draw();
+      await gloss("add_glossary_fix", wrong.value.trim(), right.value.trim()); drawGlossary();
     };
     return [
       el("h3", { className: "gtitle", textContent: t("glossary_title") }),
