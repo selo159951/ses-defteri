@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 # Code-signing certificate ("CN=Selim Oğuz", made by tools/make_cert.ps1): the updater only installs setups signed by it.
 SIGNER_THUMBPRINT = "8032931C62F4F826CF46A2566FCCBBE05130D6F3"
 EDITIONS = ("standart", "nvidia", "basit")
