@@ -100,6 +100,40 @@ def test_detect_names():
                          {"speaker": 1, "text_edited": "Hi, my name is Anna."}], default) == {1: "Anna"}
 
 
+def test_address_forms():
+    from backend.names import detect_names
+
+    default = {"0": "Speaker 1", "1": "Speaker 2", "2": "Speaker 3"}
+
+    def two(a, b):
+        return [{"speaker": 0, "text_edited": a}, {"speaker": 1, "text_edited": b}]
+    # greeting + name, name + comma, name before a final question mark
+    assert detect_names(two("Günaydın Ece, nasılsın?", "İyiyim."), default) == {1: "Ece"}
+    assert detect_names(two("Ece, rapor hazır mı?", "Bakıyorum şimdi."), default) == {1: "Ece"}
+    assert detect_names(two("Rapor hazır mı Ece?", "Bakıyorum şimdi."), default) == {1: "Ece"}
+    assert detect_names(two("Bu rapor hazır mı, Ece?", "Bakıyorum şimdi."), default) == {1: "Ece"}
+    # honorifics are not part of the name
+    assert detect_names(two("Günaydın Ece Hanım", "İyiyim."), default) == {1: "Ece"}
+    assert detect_names(two("Ece Hanım, rapor hazır mı?", "Bakıyorum şimdi."), default) == {1: "Ece"}
+    # English greetings too
+    assert detect_names(two("Good morning Ece.", "Morning."), default) == {1: "Ece"}
+    assert detect_names(two("Hello Ece, how are you?", "Fine."), default) == {1: "Ece"}
+    # a self-introduction is not an address: Selim is the speaker itself, nobody else
+    assert detect_names(two("Merhaba ben Selim.", "Merhaba."), default) == {0: "Selim"}
+    # ordinary sentence starters, places with a suffix and NOT_NAMES are no address
+    assert detect_names(two("Bugün, toplantı var.", "Evet."), default) == {}
+    assert detect_names(two("Ankara'da hava güzel.", "Evet."), default) == {}
+    assert detect_names(two("Yani, öyle dedim.", "Evet."), default) == {}
+    assert detect_names(two("Evet, devam edelim.", "Tamam."), default) == {}
+    assert detect_names(two("Selam, nasılsın?", "İyiyim."), default) == {}
+    # name before the final mark only counts in a question
+    assert detect_names(two("Rapor hazır mı Ece.", "Tamam."), default) == {}
+    # an introduction still wins over an address for the same speaker
+    segs = [{"speaker": 0, "text_edited": "Günaydın Ece."},
+            {"speaker": 1, "text_edited": "Merhaba ben Ece, arkadaşınız."}]
+    assert detect_names(segs, default) == {1: "Ece"}
+
+
 def _job():
     jid = store.create_job("meet.mp3")
     segs = build_segments([W(0, 1, " hello"), W(2.5, 3, " world")], [Turn(0, 3, 0)], max_gap=1)
