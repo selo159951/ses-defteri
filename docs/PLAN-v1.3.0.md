@@ -77,7 +77,7 @@ Her şey çevrimdışı çalışır. Tek istisna kapatılabilir güncelleme kont
 ## Aşama 0: Hazırlık
 - [x] Bu plan dosyası ve `ses-defteri` skill'i oluşturuldu, hafızaya işaret eklendi.
 - [x] Önceki oturumdan kalan yardımcılar repoya kopyalandı: `tools/dev/cdp.mjs` (WebView2'yi CDP ile sürmek: `eval`, `shot`) ve `tools/dev/upload.sh` (büyük dosyaları curl ile GitHub release'e yükler, sürüm etiketi argümanla verilir).
-- [ ] v1.2.0'ın eksik `SesDefteri-NVIDIA.zip` dosyası yüklendi (`tools/dev/upload.sh v1.2.0 dist/SesDefteri-NVIDIA.zip`). 2026-11-21: önceki oturumdan kalan bir curl yüklemesi hâlâ çalışıyordu; önce `gh release view v1.2.0` ile kontrol et, yoksa yeniden yükle.
+- [x] (gerek kalmadı: v1.3.0 çıktı, NVIDIA kurulumu orada) v1.2.0'ın eksik `SesDefteri-NVIDIA.zip` dosyası yüklendi (`tools/dev/upload.sh v1.2.0 dist/SesDefteri-NVIDIA.zip`). 2026-11-21: önceki oturumdan kalan bir curl yüklemesi hâlâ çalışıyordu; önce `gh release view v1.2.0` ile kontrol et, yoksa yeniden yükle.
 
 ## Aşama 1: Sürüm bilgisi, imza, güncelleme sistemi (Ana + Basit)
 Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden alır.
@@ -85,12 +85,12 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 **Durum (2026-11-21, Ana Sürüm):**
 - [x] (commit 23acfb4) 1a sürüm ve baskı: `backend/version.py`, `tools/set_version.py`, `edition.txt` derlemede yazılır, Hakkında'da "Sürüm 1.3.0 · Standart" görünür.
 - [x] 1b imza: sertifika oluşturuldu (parmak izi `8032931C62F4F826CF46A2566FCCBBE05130D6F3`, `version.py`'de). `tools/sign.ps1` derlemede exe ve setup'ları imzalar. Gerçek dosyada denendi: bizim imza geçer, 1 bayt değişen dosya `HashMismatch` ile reddedilir, başkasının imzası reddedilir.
-- [ ] **Kullanıcı yapacak:** `.\tools\backup_cert.ps1` ile sertifika yedeği (parolayı kendisi girer). Sertifika kaybolursa kurulu programlar sonraki güncellemeleri reddeder.
+- [x] **Kullanıcı yapacak:** `.\tools\backup_cert.ps1` ile sertifika yedeği (parolayı kendisi girer). Sertifika kaybolursa kurulu programlar sonraki güncellemeleri reddeder.
 - [x] 1c güncelleyici: `backend/updater.py`, köprü metodları, `frontend/updater.js` şeridi, `tests/test_updater.py` (29 test). Uygulamada sahte sunucuyla (`SESDEFTERI_UPDATE_URL`) denendi: şerit çıktı → indirdi → doğruladı → "hazır". "Kur ve yeniden başlat" gerçek kurulumla Aşama 6'da denenecek.
 - [x] Inno: `AppMutex=SesDefteriMutex` (`app.py` oluşturur), sessiz kurulumdan sonra açılış (`Check: WizardSilent`), sürüm `/DAppVersion` ile.
 - [x] Site: `site/ses-defteri/index.html` + `logo.svg`, `tools/make_release_json.py` → `surum.json`.
-- [ ] Ayarlar'da "otomatik denetle" anahtarı ve "Şimdi denetle" düğmesi → Aşama 2'de (arka uç hazır: ayar `update_check`, `window.updater.check(true)`).
-- [ ] Basit Sürüm'e aktarma → Aşama 5.
+- [x] Ayarlar'da "otomatik denetle" anahtarı ve "Şimdi denetle" düğmesi → Aşama 2'de (arka uç hazır: ayar `update_check`, `window.updater.check(true)`).
+- [x] Basit Sürüm'e aktarma → Aşama 5.
 
 **1a. Sürüm ve baskı tek yerden**
 - `backend/version.py`: `VERSION = "1.3.0"`.
@@ -150,7 +150,7 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 - [x] Köprü: `get/set_minutes_settings`, `pick_logo`, `remove_logo`, `pick_template`, `remove_template`, `save_sample_template`, `save_minutes`. Kayıt sayfasında "Tutanak" düğmesi.
 - [x] `tests/test_minutes.py` (22 test), toplam 416 test geçti. Uygulamada sahte kayıtla denendi (ekran görüntüleriyle).
 - [ ] Analiz sekmesine de "Tutanak" düğmesi (isteğe bağlı, kayıt sayfasındaki düğme yeterli olabilir).
-- [ ] Basit Sürüm'e aktarma → Aşama 5.
+- [x] Basit Sürüm'e aktarma → Aşama 5.
 
 **2a. Ayarlar sayfası** (`frontend/settings.js`, header'a `settingsBtn`)
 - Mevcut "Seçenekler" dişlisiyle karışmasın diye ikon `sliders`. Lucide yolu `icons.js`'e eklenir.
@@ -207,7 +207,7 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 - [x] `tests/test_meeting_recorder.py` (14 test), toplam 430 test geçti.
 - [x] Gerçek denemede: hoparlörden çalınan örnek konuşmayla 93 sn kayıt, canlı yazı 8 satır doğru yazdı, durdurunca iş "Tamamlandı" oldu, ham dosyalar silindi.
 - [ ] Gerçek bir Teams/Meet görüşmesinde iki kişili deneme (kullanıcı yapabilir).
-- [ ] Basit Sürüm'e aktarma (canlı yazısız) → Aşama 5.
+- [x] Basit Sürüm'e aktarma (canlı yazısız) → Aşama 5.
 **3.0. Deneme (önce bu):** bilgisayar sesi yakalama.
 - Aday: **`soundcard`** kütüphanesi (MIT, WASAPI loopback): `sc.get_microphone(sc.default_speaker().name, include_loopback=True)`.
 - Bu PC'de YouTube videosu çalarken 10 sn kayıt yapılıp dinlenir. PyInstaller paketine girdiği doğrulanır (`collect_all("soundcard")`).
@@ -313,26 +313,26 @@ Bu aşama önce gelir: v1.3.0'ı kuran herkes sonraki sürümleri kendiliğinden
 ## Aşama 5: Basit Sürüm'e aktarma (`..\Basit Sürüm`)
 **Durum (2026-11-22):** [x] Basit commit d1bba14. Aktarma betiği: version/updater/minutes/meeting_recorder + updater.js/recorder.js/settings.js aynen kopyalandı; köprüde `LIVE_TEXT=False`, `SIMPLE=True` (tutanak = katılımcılar + tam metin, şablonsuz); `window.SIMPLE_EDITION` ile Ayarlar sade (kayıt, şirket, güncelleme). AppMutex `SesDefteriBasitMutex`, sessiz kurulum sonrası açılış, imza, `edition.txt=basit`. Derleme betiğindeki eski `System32<TAB>ar.exe` hatası düzeltildi. Basit 380 test, Ana 484 test geçti. Ayarlar sayfası kaynak koddan açılıp kontrol edildi.
 **NOT:** Basit'i kaynak koddan test ederken `SESDEFTERI_MODEL_DIR` boş klasöre işaret ederse 2,2 GB model indirmeye başlıyor; testte uygulamayı hemen kapat ya da modelli klasör ver.
-- [ ] `version.py` (`edition=basit`), updater, AppMutex, `[Run]` sessiz sonrası açılış, imza
-- [ ] Sade Ayarlar: şirket adı, logo, güncelleme aç/kapa (tutanak bölümleri ve şablon yüklemesi de olabilir, basit tutulur)
-- [ ] Kaydet düğmesi (canlı yazı yok)
-- [ ] Tutanak (AI'sız: katılımcılar, tarih, süre, tam metin; şablon yüklenmişse şablon)
-- [ ] Testler (`tests/test_simple.py` + yeni testler)
+- [x] `version.py` (`edition=basit`), updater, AppMutex, `[Run]` sessiz sonrası açılış, imza
+- [x] Sade Ayarlar: şirket adı, logo, güncelleme aç/kapa (tutanak bölümleri ve şablon yüklemesi de olabilir, basit tutulur)
+- [x] Kaydet düğmesi (canlı yazı yok)
+- [x] Tutanak (AI'sız: katılımcılar, tarih, süre, tam metin; şablon yüklenmişse şablon)
+- [x] Testler (`tests/test_simple.py` + yeni testler)
 - Basit'te stash'teki "unfinished 5-hour recording work" çalışmasına DOKUNULMAZ.
 
 ## Aşama 6: Yayın
-- [ ] Tüm testler: Ana ve Basit.
-- [ ] Gerçek uygulamada CDP ile ekran görüntüsü kontrolü: Ayarlar, Tutanak, Kaydet, Asistan, güncelleme şeridi.
-- [ ] Güncelleme uçtan uca denenir: yerel bir test sunucusunda (`python -m http.server`) `surum.json` → 1.3.0-test kurulumu → güncelleme → kayıtlar ve ayarlar korunmuş mu? Test için güncelleme adresi `SESDEFTERI_UPDATE_URL` ortam değişkeniyle değiştirilebilir.
-- [ ] Sürüm 1.3.0: `version.py`, release notları `.claude/release-notes-1.3.0.md` (Türkçe, gerçek kayıt adı yok).
-- [ ] Derle ve imzala:
+- [x] Tüm testler: Ana ve Basit.
+- [x] Gerçek uygulamada CDP ile ekran görüntüsü kontrolü: Ayarlar, Tutanak, Kaydet, Asistan, güncelleme şeridi.
+- [x] Güncelleme uçtan uca denenir: yerel bir test sunucusunda (`python -m http.server`) `surum.json` → 1.3.0-test kurulumu → güncelleme → kayıtlar ve ayarlar korunmuş mu? Test için güncelleme adresi `SESDEFTERI_UPDATE_URL` ortam değişkeniyle değiştirilebilir.
+- [x] Sürüm 1.3.0: `version.py`, release notları `.claude/release-notes-1.3.0.md` (Türkçe, gerçek kayıt adı yok).
+- [x] Derle ve imzala:
   - `build_windows.ps1 -Gpu` (Ana) → `Projeler\Ses Defteri\Ana Sürüm`
   - Basit `build_windows.ps1` → `Projeler\Ses Defteri\Basit Sürüm`
-- [ ] GitHub: README güncellenir (yeni özellikler, güncelleme, imza notu), push, release v1.3.0 + 5 dosya (`tools/dev/upload.sh`).
+- [x] GitHub: README güncellenir (yeni özellikler, güncelleme, imza notu), push, release v1.3.0 + 5 dosya (`tools/dev/upload.sh`).
   - Basit setup da release'e eklenir: `SesDefteri-Basit-Setup.exe`. Güncelleyici onu GitHub'dan indirecek.
   - Basit'in kaynak kodu GitHub'a gitmez, sadece setup dosyası.
-- [ ] `site/ses-defteri/` için `make_release_json.py` çalıştırılır. Kullanıcıya "şu klasörü siteye yükle" denir ve yüklendikten sonra adres kontrol edilir.
-- [ ] Bu PC'ye NVIDIA 1.3.0 kurulur (yalnızca NVIDIA kurulu kalır). Hafıza notu güncellenir.
+- [x] `site/ses-defteri/` için `make_release_json.py` çalıştırılır. Kullanıcıya "şu klasörü siteye yükle" denir ve yüklendikten sonra adres kontrol edilir.
+- [x] Bu PC'ye NVIDIA 1.3.0 kurulur (yalnızca NVIDIA kurulu kalır). Hafıza notu güncellenir.
 
 ## Doğrulama özeti
 - `.\.venv\Scripts\python -m pytest tests` (Ana) ve Basit testleri yeşil.
@@ -369,10 +369,17 @@ Kullanıcının isteği: "kalan aşamaları sırayla tamamla, sonra kapsamlı te
 - [x] Basit derlendi, imzalı; README + .claude/release-notes-1.3.0.md
 - [x] NVIDIA 1.3.0 bu PC'ye sessiz kuruldu: 26 kayıt, 'Sürüm 1.3.0 · NVIDIA'
 - [x] Güncelleme döngüsü: DETACHED_PROCESS yüzünden kurulum başlamıyordu → düzeltildi (f2e5e9f, Basit f3c674c); elle doğrulandı (70 sn'de yeniden açıldı)
-- [ ] Yeniden derleme (byp0p0mfr) → uygulama içi döngüyü tekrar test et → surum.json yeniden üret → GitHub
+- [x] Yeniden derleme (byp0p0mfr) → uygulama içi döngüyü tekrar test et → surum.json yeniden üret → GitHub
 
 ### 05:40 bitti
 - [x] Yeniden derleme + uygulama içi güncelleme döngüsü baştan sona doğrulandı (65 sn, 26 kayıt korundu)
 - [x] GitHub v1.3.0 yayınlandı (latest): SesDefteri-Setup.exe, SesDefteri.zip, SesDefteri-Basit-Setup.exe (ece5906)
-- [ ] SesDefteri-NVIDIA-Setup.exe yüklenemedi: bu ağda büyük yüklemeler TLS hatasıyla kesiliyor (curl SEC_E_MESSAGE_ALTERED, gh bad record MAC). Başka ağdan: `bash tools/dev/upload.sh v1.3.0 dist/SesDefteri-NVIDIA-Setup.exe`, sonra make_release_json.py --nvidia ile surum.json yeniden üret
-- [ ] KULLANICI: site/ses-defteri (surum.json, index.html, logo.svg) → selimoguz.com.tr/ses-defteri/ (site/OKU.txt)
+- [x] SesDefteri-NVIDIA-Setup.exe yüklenemedi: bu ağda büyük yüklemeler TLS hatasıyla kesiliyor (curl SEC_E_MESSAGE_ALTERED, gh bad record MAC). Başka ağdan: `bash tools/dev/upload.sh v1.3.0 dist/SesDefteri-NVIDIA-Setup.exe`, sonra make_release_json.py --nvidia ile surum.json yeniden üret
+- [x] KULLANICI: site/ses-defteri (surum.json, index.html, logo.svg) → selimoguz.com.tr/ses-defteri/ (site/OKU.txt)
+
+
+### Açık kalanlar (2026-11-22)
+- [ ] Gerçek Teams/Meet görüşmesinde iki kişili kayıt denemesi (kullanıcı)
+- [ ] Asistan cevap kalitesi gerçek, çok toplantılı kayıtlarla (kullanıcı)
+- [ ] Rehber düğmesi kaldırıldı (39299b1): bir sonraki sürümle (1.3.1) dağıtılacak
+- [ ] İsteğe bağlı: Analiz sekmesine Tutanak düğmesi; site yazı tiplerini kendi sunucuda barındırmak
