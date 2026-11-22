@@ -31,6 +31,33 @@ const SAMPLE_ANALYSIS = {
   const stopPoll = () => { clearTimeout(pollT); pollT = null; };
   const devName = (d) => t({ vulkan: "dev_vulkan", cuda: "dev_cuda", cpu: "dev_cpu" }[d] || "dev_cpu");
   const card = (title, ...kids) => el("div", { className: "acard" }, el("h3", { textContent: title }), ...kids);
+  const talkClock = (sec) => {
+    sec = Math.max(0, Math.floor(sec));
+    return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+  };
+
+  /* Talk time from the transcript in memory: seconds per speaker, a bar with mm:ss and the share. */
+  function talkTimeCard() {
+    const talk = new Map();
+    let total = 0;
+    for (const s of job?.segments || []) {
+      const sec = Math.max(0, (Number(s.end) || 0) - (Number(s.start) || 0));
+      if (!sec || !(s.text_edited || s.text_original || "").trim()) continue;
+      talk.set(s.speaker, (talk.get(s.speaker) || 0) + sec);
+      total += sec;
+    }
+    if (!talk.size || !total) return null;
+    const box = card(t("an_talk_time"));
+    for (const [id, sec] of [...talk.entries()].sort((a, b) => b[1] - a[1])) {
+      const pct = Math.round((sec / total) * 100);
+      box.append(el("div", { className: "atalk" },
+        el("div", { className: "atalkhead" },
+          el("span", { className: "name " + spkClass(id), textContent: speakerName(id) }),
+          el("span", { className: "ameta", textContent: `${talkClock(sec)} · ${pct}%` })),
+        el("div", { className: "asharebar" }, el("div", { style: `width:${pct}%` }))));
+    }
+    return box;
+  }
 
   function setTab(which) {
     tab = which;
@@ -167,7 +194,8 @@ const SAMPLE_ANALYSIS = {
     if (st.state === "queued" || st.state === "running") return pane.replaceChildren(progressCard(st));
     if (st.state === "error" || st.state === "cancelled") return pane.replaceChildren(errorCard(st));
     if ((st.state === "done" || st.state === "stale") && st.analysis) return pane.replaceChildren(...analysisCards(st));
-    pane.replaceChildren(noneCard(st));
+    const talk = talkTimeCard(); // still worth showing before an analysis is made
+    pane.replaceChildren(...(talk ? [talk] : []), noneCard(st));
   }
 
   function noneCard(st) {
@@ -216,6 +244,10 @@ const SAMPLE_ANALYSIS = {
       banner.append(re);
       out.push(banner);
     }
+
+    // talk time first: it needs no analysis, only the transcript
+    const talk = talkTimeCard();
+    if (talk) out.push(talk);
 
     // header: model, device, duration, disclaimer
     const meta = [];

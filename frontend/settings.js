@@ -6,8 +6,8 @@
     set_company: "Company", set_company_name: "Company name", set_company_ph: "Shown at the top of the minutes",
     set_color: "Heading colour", set_logo: "Logo", set_logo_pick: "Choose logo…", set_logo_remove: "Remove logo",
     set_logo_none: "No logo yet (PNG or JPG, up to 2 MB).",
-    set_minutes: "Meeting minutes", set_minutes_desc: "The \"Minutes\" button on a recording makes a Word file with these parts, in this order.",
-    sec_participants: "Participants", sec_summary: "Summary", sec_chapters: "Agenda and chapters", sec_decisions: "Decisions",
+    set_minutes: "Meeting minutes", set_minutes_desc: "The \"Minutes\" button on a recording makes a Word or PDF file with these parts, in this order.",
+    sec_participants: "Participants", sec_talktime: "Talk time", sec_summary: "Summary", sec_chapters: "Agenda and chapters", sec_decisions: "Decisions",
     sec_tasks: "Tasks (table)", sec_questions: "Open questions", sec_transcript: "Full transcript",
     set_up: "Move up", set_down: "Move down",
     set_template: "Own Word template",
@@ -25,16 +25,17 @@
     set_rec_mic: "Record the microphone", set_mic_which: "Microphone", set_mic_default: "Windows default microphone",
     set_live_default: "Start live text with every recording (uses the computer more; can be switched during recording)",
     set_rec_note: "The recording stays on this computer. If the app crashes, nothing is lost: it is offered at the next start.",
-    minutes_btn: "Minutes", minutes_btn_title: "Meeting minutes as Word: logo, participants, summary, decisions, tasks (Settings page)",
+    minutes_btn: "Minutes", minutes_btn_title: "Meeting minutes as Word or PDF: logo, participants, summary, decisions, tasks (Settings page)",
     minutes_no_analysis: "Saved without summary, decisions and tasks: run the meeting analysis first for those.",
+    minutes_pdf_template: "A PDF is always made with the built-in layout; your own Word template is used for Word only.",
   });
   Object.assign(I18N.tr, {
     settings: "Ayarlar", set_title: "Ayarlar",
     set_company: "Şirket", set_company_name: "Şirket adı", set_company_ph: "Tutanağın üstünde görünür",
     set_color: "Başlık rengi", set_logo: "Logo", set_logo_pick: "Logo seç…", set_logo_remove: "Logoyu kaldır",
     set_logo_none: "Henüz logo yok (PNG ya da JPG, en fazla 2 MB).",
-    set_minutes: "Toplantı tutanağı", set_minutes_desc: "Kayıt sayfasındaki \"Tutanak\" düğmesi bu bölümleri bu sırayla içeren bir Word dosyası hazırlar.",
-    sec_participants: "Katılımcılar", sec_summary: "Özet", sec_chapters: "Gündem ve bölümler", sec_decisions: "Alınan kararlar",
+    set_minutes: "Toplantı tutanağı", set_minutes_desc: "Kayıt sayfasındaki \"Tutanak\" düğmesi bu bölümleri bu sırayla içeren bir Word ya da PDF dosyası hazırlar.",
+    sec_participants: "Katılımcılar", sec_talktime: "Konuşma süreleri", sec_summary: "Özet", sec_chapters: "Gündem ve bölümler", sec_decisions: "Alınan kararlar",
     sec_tasks: "Görevler (tablo)", sec_questions: "Açık sorular", sec_transcript: "Tam konuşma metni",
     set_up: "Yukarı taşı", set_down: "Aşağı taşı",
     set_template: "Kendi Word şablonunuz",
@@ -52,23 +53,34 @@
     set_rec_mic: "Mikrofonu kaydet", set_mic_which: "Mikrofon", set_mic_default: "Windows'un varsayılan mikrofonu",
     set_live_default: "Kayda başlarken canlı yazıyı da aç (bilgisayarı yorar; kayıt sırasında da açılıp kapatılabilir)",
     set_rec_note: "Kayıt bu bilgisayarda kalır. Program çökerse kayıt kaybolmaz, bir sonraki açılışta sorulur.",
-    minutes_btn: "Tutanak", minutes_btn_title: "Word toplantı tutanağı: logo, katılımcılar, özet, kararlar, görevler (Ayarlar sayfası)",
+    minutes_btn: "Tutanak", minutes_btn_title: "Word ya da PDF toplantı tutanağı: logo, katılımcılar, özet, kararlar, görevler (Ayarlar sayfası)",
     minutes_no_analysis: "Özet, kararlar ve görevler olmadan kaydedildi: bunlar için önce toplantı analizini çalıştırın.",
+    minutes_pdf_template: "PDF her zaman yerleşik düzenle hazırlanır; kendi Word şablonunuz yalnızca Word için kullanılır.",
   });
 
-  /* "Minutes" button on a recording */
+  /* "Minutes" button on a recording: Word or PDF, the format is remembered */
+  const fmtSel = $("minutesFmt");
+  try {
+    const savedFmt = localStorage.getItem("minutesFmt");
+    if (savedFmt === "docx" || savedFmt === "pdf") fmtSel.value = savedFmt;
+  } catch (e) { /* not remembered */ }
+  fmtSel.onchange = () => { try { localStorage.setItem("minutesFmt", fmtSel.value); } catch (e) { /* not remembered */ } };
+
   $("minutesBtn").onclick = async () => {
     await save();
+    const fmt = fmtSel.value === "pdf" ? "pdf" : "docx";
     try {
-      const r = await call("save_minutes", job.id, LANG);
+      const r = await call("save_minutes", job.id, LANG, fmt);
       reportSaved(r);
-      if (r.paths && !r.analysis && !window.SIMPLE_EDITION) setTimeout(() => toast(t("minutes_no_analysis"), false,
+      if (r.paths && fmt === "pdf" && r.template) setTimeout(() => toast(t("minutes_pdf_template"), false,
+        { label: t("show_folder"), run: () => call("reveal", r.paths[0]) }), 3600);
+      else if (r.paths && !r.analysis && !window.SIMPLE_EDITION) setTimeout(() => toast(t("minutes_no_analysis"), false,
         { label: t("show_folder"), run: () => call("reveal", r.paths[0]) }), 3600);
     } catch (e) { toast(t("export_failed") + msg(e)); }
   };
 
   const root = $("settings");
-  const ALL = ["participants", "summary", "chapters", "decisions", "tasks", "questions", "transcript"];
+  const ALL = ["participants", "talktime", "summary", "chapters", "decisions", "tasks", "questions", "transcript"];
   const S = { cfg: null, settings: null, info: null, upd: "" };
   const msg = (e) => (e && e.message) || String(e);
 
@@ -139,7 +151,8 @@
       list.append(el("li", { className: on ? "" : "off" },
         el("label", {}, cb, " " + t("sec_" + s)), el("span", { className: "spacer" }), up, down));
     });
-    return card(t("set_minutes"), el("p", { className: "sline dim", textContent: t("set_minutes_desc") }), list);
+    return card(t("set_minutes"), el("p", { className: "sline dim", textContent: t("set_minutes_desc") }),
+      el("p", { className: "sline dim", textContent: t("minutes_pdf_template") }), list);
   }
 
   function templateCard() {

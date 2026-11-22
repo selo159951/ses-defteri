@@ -1,9 +1,9 @@
 """Meeting minutes ("tutanak") as a Word file.
 
 Two ways, set on the Settings page:
-- built in: company logo and name on top, date / time / length, participants, then the chosen sections in the chosen
-  order (summary, chapters, decisions, a task table, open questions, optional full transcript), headings in the
-  company colour;
+- built in: company logo and name on top, date / time / length, participants, talk time, then the chosen sections in
+  the chosen order (summary, chapters, decisions, a task table, open questions, optional full transcript), headings in
+  the company colour; the same layout can be saved as PDF (build_pdf);
 - the user's own Word template (%APPDATA%\\SesDefteri\\templates\\tutanak.docx) with placeholders such as {tarih},
   {özet}, {kararlar} or a table row with {görev.kim} {görev.ne} {görev.tarih}: the template keeps its own layout,
   fonts and logo, the app only fills the placeholders (see assets/tutanak-ornek.docx for the full list).
@@ -21,28 +21,30 @@ from pathlib import Path
 
 from . import asr, export, store
 
-SECTIONS = ("participants", "summary", "chapters", "decisions", "tasks", "questions", "transcript")
-DEFAULT_SECTIONS = ["participants", "summary", "chapters", "decisions", "tasks", "questions"]
+SECTIONS = ("participants", "talktime", "summary", "chapters", "decisions", "tasks", "questions", "transcript")
+DEFAULT_SECTIONS = ["participants", "talktime", "summary", "chapters", "decisions", "tasks", "questions"]
 DEFAULT_COLOR = "#2563eb"
 MAX_LOGO = 2 * 1024 * 1024
 MAX_TEMPLATE = 20 * 1024 * 1024
 
 LABELS = {
     "tr": {"title": "Toplantı Tutanağı", "date": "Tarih", "time": "Saat", "length": "Süre", "recording": "Kayıt",
-           "participants": "Katılımcılar", "summary": "Özet", "chapters": "Gündem ve bölümler",
+           "participants": "Katılımcılar", "talktime": "Konuşma süreleri", "seconds": "Süre", "percent": "%",
+           "summary": "Özet", "chapters": "Gündem ve bölümler",
            "decisions": "Alınan kararlar", "tasks": "Görevler", "who": "Kim", "what": "Ne", "when": "Ne zaman",
            "questions": "Açık sorular", "transcript": "Konuşma metni", "share": "konuşma payı",
            "no_analysis": "Bu kayıt için toplantı analizi yapılmadı: özet, kararlar ve görevler yok.",
            "none": "Yok", "made_with": "Ses Defteri ile hazırlandı", "minutes": "tutanak"},
     "en": {"title": "Meeting Minutes", "date": "Date", "time": "Time", "length": "Length", "recording": "Recording",
-           "participants": "Participants", "summary": "Summary", "chapters": "Agenda and chapters",
+           "participants": "Participants", "talktime": "Talk time", "seconds": "Time", "percent": "%",
+           "summary": "Summary", "chapters": "Agenda and chapters",
            "decisions": "Decisions", "tasks": "Tasks", "who": "Who", "what": "What", "when": "When",
            "questions": "Open questions", "transcript": "Transcript", "share": "of the talk",
            "no_analysis": "No meeting analysis was made for this recording: no summary, decisions or tasks.",
            "none": "None", "made_with": "Made with Ses Defteri", "minutes": "minutes"},
 }
 
-LIST_KEYS = {"kararlar", "aciksorular", "bolumler", "katilimcilistesi", "metin"}
+LIST_KEYS = {"kararlar", "aciksorular", "bolumler", "katilimcilistesi", "konusmasureleri", "metin"}
 ROW_PREFIX = "gorev."
 _FOLD = str.maketrans("ıİçÇğĞöÖşŞüÜâÂîÎûÛ", "iiccggoossuuaaiiuu")
 PLACEHOLDER = re.compile(r"\{([^{}\n]{1,40})\}")
@@ -148,14 +150,42 @@ def remove_template() -> dict:
 # ---------------------------------------------------------------- content
 def _clock(sec: float) -> str:
     sec = int(sec or 0)
+    if sec < 60:  # a short recording: "0 dk" would look like nothing was recorded
+        return f"{sec} sn"
     h, m = divmod(sec // 60, 60)
     return f"{h} sa {m} dk" if h else f"{m} dk"
 
 
 def _clock_en(sec: float) -> str:
     sec = int(sec or 0)
+    if sec < 60:
+        return f"{sec} s"
     h, m = divmod(sec // 60, 60)
     return f"{h} h {m} min" if h else f"{m} min"
+
+
+def _mmss(sec: float) -> str:
+    sec = int(round(sec or 0))
+    return f"{sec // 60:02d}:{sec % 60:02d}"
+
+
+def talk_times(job: dict, lang: str) -> list[dict]:
+    """[{kim, sure, yuzde, _sec}] by talk time, summed from the transcript segments (empty lines ignored)."""
+    talk: dict[int, float] = {}
+    for s in job.get("segments") or []:
+        if not (s.get("text_edited") or s.get("text_original") or "").strip():
+            continue
+        try:
+            sec = max(0.0, float(s.get("end") or 0) - float(s.get("start") or 0))
+            spk = int(s.get("speaker"))
+        except (TypeError, ValueError):
+            continue
+        if sec > 0:
+            talk[spk] = talk.get(spk, 0.0) + sec
+    total = sum(talk.values()) or 1.0
+    pct = (lambda s: f"%{round(s * 100)}") if lang == "tr" else (lambda s: f"{round(s * 100)}%")
+    return [{"kim": export._name(job, k, lang), "sure": _mmss(v), "yuzde": pct(v / total), "_sec": v}
+            for k, v in sorted(talk.items(), key=lambda kv: -kv[1])]
 
 
 def participants(job: dict, analysis: dict | None, lang: str) -> list[dict]:
@@ -180,6 +210,7 @@ def context(job: dict, analysis: dict | None, lang: str = "tr", company: str = "
     a = analysis or {}
     when = datetime.datetime.fromtimestamp(float(job.get("created") or 0) or datetime.datetime.now().timestamp())
     people = participants(job, a, lang)
+    talk = talk_times(job, lang)
     pct = (lambda s: f"%{round(s * 100)}") if lang == "tr" else (lambda s: f"{round(s * 100)}%")
     chapters = a.get("chapters") or a.get("topics") or []
     tasks = [{"kim": export._spk(job, t.get("owner"), lang), "ne": str(t.get("task", "")), "tarih": str(t.get("due") or "")}
@@ -196,6 +227,7 @@ def context(job: dict, analysis: dict | None, lang: str = "tr", company: str = "
         "katilimcilar": ", ".join(p["name"] for p in people),
         "katilimcilistesi": [f"{p['name']} ({pct(p['share'])} {L['share']})" if p.get("share") is not None else p["name"]
                              for p in people],
+        "konusmasureleri": [f"{t['kim']} — {t['sure']} ({t['yuzde']})" for t in talk],
         "kararlar": [str(d.get("text", "")) for d in a.get("decisions") or []],
         "aciksorular": [(f"{export._spk(job, q.get('asker'), lang)}: " if q.get("asker") is not None else "") + str(q.get("text", ""))
                         for q in a.get("open_questions") or []],
@@ -204,6 +236,7 @@ def context(job: dict, analysis: dict | None, lang: str = "tr", company: str = "
         "gorevler": tasks,
         "metin": lines,
         "_people": people,
+        "_talk": talk,
         "_has_analysis": bool(a),
     }
 
@@ -291,6 +324,21 @@ def builtin(ctx: dict, cfg: dict, lang: str = "tr", note_missing: bool = True) -
         if name == "participants":
             heading(L["participants"])
             bullets(ctx["katilimcilistesi"])
+        elif name == "talktime":
+            heading(L["talktime"])
+            if not ctx["_talk"]:
+                bullets([])
+            else:
+                tb = doc.add_table(rows=1, cols=3)
+                tb.style = "Table Grid"
+                for cell, txt in zip(tb.rows[0].cells, (L["who"], L["seconds"], L["percent"])):
+                    cell.text = txt
+                    cell.paragraphs[0].runs[0].bold = True
+                for t in ctx["_talk"]:
+                    c = tb.add_row().cells
+                    c[0].text, c[1].text, c[2].text = t["kim"], t["sure"], t["yuzde"]
+                for row in tb.rows:
+                    row.cells[0].width, row.cells[1].width, row.cells[2].width = Cm(8), Cm(4), Cm(3)
         elif name == "summary":
             heading(L["summary"])
             doc.add_paragraph(ctx["ozet"] or L["none"])
@@ -453,6 +501,196 @@ def fill_template(data: bytes, ctx: dict) -> bytes:
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- PDF (built-in layout only)
+def _wrap(pdf, text: str, width: float) -> list[str]:
+    """Greedy word wrap that fits the given width in the font fpdf already has set."""
+    words = str(text).split()
+    if not words:
+        return [""]
+    lines, current = [], words[0]
+    for word in words[1:]:
+        trial = current + " " + word
+        if pdf.get_string_width(trial) <= width:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    return lines + [current]
+
+
+def build_pdf(job: dict, analysis: dict | None, lang: str = "tr", note_missing: bool = True,
+              sections: list[str] | None = None) -> bytes:
+    """The built-in minutes layout as PDF. A user Word template cannot be used here: PDF always uses the built-in
+    layout. Needs fpdf2; Arial from Windows is embedded so Turkish letters are right."""
+    from fpdf import FPDF
+
+    lang = lang if lang in LABELS else "tr"
+    L = LABELS[lang]
+    cfg = config()
+    if sections is not None:
+        cfg["sections"] = clean_sections(sections)
+    ctx = context(job, analysis, lang, cfg["company_name"])
+
+    pdf = FPDF(unit="mm", format="A4")
+    pdf.set_auto_page_break(True, margin=16)
+    pdf.set_margins(20, 18, 20)
+
+    regular = Path("C:/Windows/Fonts/arial.ttf")
+    bold = Path("C:/Windows/Fonts/arialbd.ttf")
+    unicode_ok = regular.exists()
+    if unicode_ok:
+        pdf.add_font("SDFont", "", str(regular))
+        pdf.add_font("SDFont", "B", str(bold if bold.exists() else regular))
+        family = "SDFont"
+    else:  # no Windows font: a core font still makes a readable file (Turkish letters are folded)
+        family = "Helvetica"
+
+    def text(value) -> str:
+        s = str(value)
+        if unicode_ok:
+            return s
+        return s.translate(_FOLD).replace("—", "-").replace("–", "-").replace("•", "-")
+
+    h = clean_color(cfg.get("company_color")).lstrip("#")
+    color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    grey, line = (107, 111, 118), (190, 190, 190)
+    pdf.add_page()
+
+    def para(value, size: int = 10, height: float = 5, style: str = "", rgb=None) -> None:
+        pdf.set_font(family, style, size)
+        pdf.set_text_color(*(rgb or (0, 0, 0)))
+        pdf.multi_cell(0, height, text(value))
+        pdf.set_x(pdf.l_margin)
+
+    def heading(value: str) -> None:
+        pdf.ln(4)
+        pdf.set_font(family, "B", 13)
+        pdf.set_text_color(*color)
+        pdf.multi_cell(0, 7, text(value))
+        pdf.set_x(pdf.l_margin)
+        pdf.set_text_color(0, 0, 0)
+
+    def bullets(items: list[str]) -> None:
+        if not items:
+            para(L["none"], rgb=grey)
+            return
+        for item in items:
+            para(("• " if unicode_ok else "- ") + str(item))
+
+    def table(headers, rows, widths) -> None:
+        pdf.set_font(family, "B", 10)
+        pdf.set_fill_color(235, 236, 238)
+        pdf.set_draw_color(*line)
+        for w, head in zip(widths, headers):
+            pdf.cell(w, 7, text(head), border=1, fill=True)
+        pdf.ln(7)
+        pdf.set_font(family, "", 10)
+        for row in rows:
+            cells = [_wrap(pdf, text(value), w - 3) for value, w in zip(row, widths)]
+            height = max(len(c) for c in cells) * 5.5 + 2
+            x0, y0 = pdf.get_x(), pdf.get_y()
+            if y0 + height > pdf.h - 20:  # a long row goes to the next page whole
+                pdf.add_page()
+                x0, y0 = pdf.get_x(), pdf.get_y()
+            for ci, (w, lines) in enumerate(zip(widths, cells)):
+                x = x0 + sum(widths[:ci])
+                for li, cell_text in enumerate(lines):
+                    pdf.set_xy(x + 1.5, y0 + 1 + li * 5.5)
+                    pdf.cell(w - 3, 5.5, cell_text)
+            pdf.rect(x0, y0, sum(widths), height)
+            cx = x0
+            for w in widths[:-1]:
+                cx += w
+                pdf.line(cx, y0, cx, y0 + height)
+            pdf.set_xy(x0, y0 + height)
+        pdf.ln(2)
+
+    # logo and company name
+    top = pdf.get_y()
+    used_logo = False
+    logo = logo_path() if cfg.get("logo", True) else None
+    if logo:
+        try:
+            pdf.image(str(logo), x=pdf.l_margin, y=top, h=12)
+            used_logo = True
+        except Exception:  # a logo fpdf cannot read never blocks the minutes
+            used_logo = False
+    if cfg.get("company_name"):
+        pdf.set_xy(pdf.l_margin + (24 if used_logo else 0), top + 2)
+        pdf.set_font(family, "B", 13)
+        pdf.set_text_color(*color)
+        pdf.cell(0, 8, text(cfg["company_name"]))
+        pdf.set_text_color(0, 0, 0)
+    if used_logo or cfg.get("company_name"):
+        pdf.set_y(top + 15)
+
+    pdf.ln(2)
+    pdf.set_font(family, "B", 20)
+    pdf.set_text_color(*color)
+    pdf.multi_cell(0, 10, text(L["title"]))
+    pdf.set_x(pdf.l_margin)
+    para(ctx["kayit"], size=11, rgb=grey)
+    pdf.ln(1)
+
+    pdf.set_draw_color(*line)
+    for k, v in ((L["date"], ctx["tarih"]), (L["time"], ctx["saat"]), (L["length"], ctx["sure"])):
+        pdf.set_font(family, "B", 10)
+        pdf.cell(40, 7, text(k), border=1)
+        pdf.set_font(family, "", 10)
+        pdf.cell(120, 7, text(v), border=1)
+        pdf.ln(7)
+    pdf.ln(2)
+
+    if note_missing and not ctx["_has_analysis"]:
+        para(L["no_analysis"], rgb=grey)
+
+    needs_analysis = {"summary", "chapters", "decisions", "tasks", "questions"}
+    for name in cfg.get("sections") or DEFAULT_SECTIONS:
+        if name in needs_analysis and not ctx["_has_analysis"]:
+            continue
+        if name == "participants":
+            heading(L["participants"])
+            bullets(ctx["katilimcilistesi"])
+        elif name == "talktime":
+            heading(L["talktime"])
+            if ctx["_talk"]:
+                table([L["who"], L["seconds"], L["percent"]],
+                      [[t["kim"], t["sure"], t["yuzde"]] for t in ctx["_talk"]], [90, 40, 40])
+            else:
+                bullets([])
+        elif name == "summary":
+            heading(L["summary"])
+            para(ctx["ozet"] or L["none"])
+        elif name == "chapters":
+            heading(L["chapters"])
+            bullets(ctx["bolumler"])
+        elif name == "decisions":
+            heading(L["decisions"])
+            bullets(ctx["kararlar"])
+        elif name == "tasks":
+            heading(L["tasks"])
+            if not ctx["gorevler"]:
+                bullets([])
+            else:
+                table([L["who"], L["what"], L["when"]],
+                      [[t["kim"], t["ne"], t["tarih"] or "—"] for t in ctx["gorevler"]], [45, 95, 30])
+        elif name == "questions":
+            heading(L["questions"])
+            bullets(ctx["aciksorular"])
+        elif name == "transcript":
+            heading(L["transcript"])
+            for item in ctx["metin"]:
+                para(item, size=9, height=4.5)
+
+    if pdf.get_y() > pdf.h - 24:
+        pdf.add_page()
+    pdf.set_y(-16)
+    pdf.set_font(family, "", 8)
+    pdf.set_text_color(*grey)
+    pdf.cell(0, 5, text(f"{L['made_with']} · {ctx['tarih']}"), align="C")
+    return bytes(pdf.output())
 
 
 # ---------------------------------------------------------------- entry point
