@@ -56,6 +56,32 @@ def _job(job_id: str) -> dict:
         raise ValueError("job not found") from None
 
 
+def _job_audio_ready(job_id: str) -> bool:
+    """True when the job has its own complete audio.mp3, so a recording's raw WAV is no longer needed."""
+    try:
+        if not store.read_transcript(job_id).get("audio_ready"):
+            return False
+        return (store.job_path(job_id) / "audio.mp3").exists()
+    except (OSError, ValueError):
+        return False
+
+
+def _drop_recording_source(job_id: str, source_path: str | None) -> None:
+    """Delete a recording made in the app (its raw WAV folder) once the job has a complete audio.mp3.
+    Never touches a file the user picked: only folders directly under recordings/ are removed."""
+    if not source_path:
+        return
+    from . import meeting_recorder
+
+    try:
+        folder = Path(source_path).parent.resolve()
+        base = meeting_recorder.recordings_dir().resolve()
+    except OSError:
+        return
+    if folder.parent == base and _job_audio_ready(job_id):
+        meeting_recorder.done(folder)
+
+
 class Api(SystemApi, LlmApi):
     """Methods starting with "_" are not exposed to the page."""
 
@@ -192,24 +218,30 @@ class Api(SystemApi, LlmApi):
         """Continue a job that was paused or interrupted (app closed while it was running)."""
         job = _job(job_id)
         if job["status"] not in ("interrupted", "error", "paused"):
-            raise ValueError("this recording is not paused")
+            raise ValueError("Bu kayıt duraklatılmış değil.")
         if pipeline.is_active(job_id):
-            raise ValueError("this recording is still being processed")
+            raise ValueError("Bu kayıt hâlâ işleniyor.")
         has_audio = job.get("audio_ready", True) and (store.job_path(job_id) / "audio.mp3").exists()
         source = job.get("source_path")
         if not has_audio and not (source and Path(source).is_file()):
-            raise ValueError("the audio of this recording is missing - add the file again")
+            raise ValueError("Bu kaydın sesi bulunamadı; dosyayı yeniden ekle.")
         pipeline._stop.pop(job_id, None)
         store.update_job(job_id, status="queued", stage="queued", error=None, waiting_for=None)
         pipeline.enqueue(job_id)  # a resumed recording goes to the end of the line
-        threading.Thread(target=run_job, args=(job_id, None), kwargs={"resume": True}, daemon=True).start()
+
+        def run():
+            run_job(job_id, None, resume=True)
+            if job.get("recorded"):  # a recording made in the app: drop its raw WAV once the mp3 copy is whole
+                _drop_recording_source(job_id, source)
+
+        threading.Thread(target=run, daemon=True).start()
         return {"id": job_id, "filename": job["filename"]}
 
     def pause_job(self, job_id: str) -> dict:
         """Stop after the current step; finished parts are kept and "resume_job" continues."""
         _job(job_id)
         if not pipeline.request_stop(job_id, "pause"):
-            raise ValueError("this recording is not being processed")
+            raise ValueError("Bu kayıt şu an işlenmiyor.")
         return {"ok": True}
 
     def cancel_job(self, job_id: str) -> dict:
@@ -218,7 +250,7 @@ class Api(SystemApi, LlmApi):
         if pipeline.request_stop(job_id, "cancel"):
             return {"ok": True, "pending": True}
         if job["status"] == "done":
-            raise ValueError("this recording is finished - delete it instead")
+            raise ValueError("Bu kayıt bitti; silmek için \"Sil\" düğmesini kullan.")
         store.delete_job(job_id)
         return {"ok": True}
 
@@ -342,9 +374,11 @@ class Api(SystemApi, LlmApi):
         if getattr(self, "_rec", None):
             return self.rec_status()
         s = self._rec_settings()
+        if not s["rec_system"] and not s["rec_mic"]:
+            raise ValueError("Ayarlar'da hem mikrofon hem bilgisayar sesi kapalı. En az birini aç.")
         devices = meeting_recorder.open_devices(s["rec_system"], s["rec_mic"], s["rec_mic_id"] or None)
         if not devices:
-            raise ValueError("no microphone or speaker was found")
+            raise ValueError("Mikrofon ya da hoparlör bulunamadı.")
         self._live = None
         self._rec = meeting_recorder.MeetingRecorder(devices, on_audio=self._feed_live)
         self._rec.start()
@@ -397,24 +431,32 @@ class Api(SystemApi, LlmApi):
         return {"active": False}
 
     def _start_recording_job(self, wav: Path) -> dict:
-        from . import meeting_recorder
-
-        folder = wav.parent
         job_id = store.create_job(wav.name)
         store.update_job(job_id, source_path=str(wav), recorded=True)
         pipeline.enqueue(job_id)
 
         def run():
             run_job(job_id, wav, keep_source=True)
-            if (store.job_path(job_id) / "audio.mp3").exists():  # the job has its own copy: drop the raw recording
-                meeting_recorder.done(folder)
+            # only a complete audio.mp3 makes the raw recording expendable; a half-written one must not lose it
+            _drop_recording_source(job_id, str(wav))
         threading.Thread(target=run, daemon=True).start()
         return {"id": job_id, "filename": wav.name}
 
     def rec_leftovers(self) -> list:
+        """Recordings cut off by a crash. A folder that already belongs to a job in the list is not offered
+        again: that job has its own "Devam et" button."""
         from . import meeting_recorder
 
-        return meeting_recorder.leftovers()
+        used = set()
+        for j in store.list_jobs():
+            try:
+                sp = store.read_transcript(j["id"]).get("source_path")
+            except (OSError, ValueError):
+                continue
+            if sp:
+                used.add(str(Path(sp).parent.resolve()))
+        return [l for l in meeting_recorder.leftovers()
+                if str((meeting_recorder.recordings_dir() / l["folder"]).resolve()) not in used]
 
     def recover_recording(self, folder: str) -> dict:
         from . import meeting_recorder
@@ -647,11 +689,11 @@ class Api(SystemApi, LlmApi):
                 return {"error": "bad format"}
             path = store.job_path(job_id) / "analysis.json"
             if not path.exists():
-                raise ValueError("this recording has no finished analysis yet")
+                raise ValueError("Bu kayıt için henüz tamamlanmış bir analiz yok.")
             try:
                 analysis = json.loads(path.read_text("utf-8"))
             except (OSError, ValueError):
-                raise ValueError("the analysis file could not be read") from None
+                raise ValueError("Analiz dosyası okunamadı.") from None
             suffix = "analiz" if lang == "tr" else "analysis"
             chosen = _first(win.create_file_dialog(
                 webview.FileDialog.SAVE, directory=self._last_dir(),

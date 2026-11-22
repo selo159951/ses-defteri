@@ -4,7 +4,7 @@ Two ways, set on the Settings page:
 - built in: company logo and name on top, date / time / length, participants, then the chosen sections in the chosen
   order (summary, chapters, decisions, a task table, open questions, optional full transcript), headings in the
   company colour;
-- the user's own Word template (%APPDATA%\\SesDefteri\\templates\\tutanak.docx) with placeholders such as {tarih},
+- the user's own Word template (%APPDATA%\\SesDefteriBasit\\templates\\tutanak.docx) with placeholders such as {tarih},
   {özet}, {kararlar} or a table row with {görev.kim} {görev.ne} {görev.tarih}: the template keeps its own layout,
   fonts and logo, the app only fills the placeholders (see assets/tutanak-ornek.docx for the full list).
 
@@ -101,18 +101,18 @@ def set_logo(src: str) -> dict:
     p = Path(src)
     ext = p.suffix.lower().lstrip(".").replace("jpeg", "jpg")
     if ext not in ("png", "jpg"):
-        raise ValueError("logo must be a PNG or JPG picture")
+        raise ValueError("Logo PNG ya da JPG resmi olmalı.")
     if p.stat().st_size > MAX_LOGO:
-        raise ValueError("logo is larger than 2 MB")
+        raise ValueError("Logo 2 MB'tan büyük olamaz.")
     data = p.read_bytes()
     if not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8")):
-        raise ValueError("not a picture file")
+        raise ValueError("Bu dosya bir resim değil.")
     try:  # Word must be able to place it
         from docx.image.image import Image
 
         Image.from_blob(data)
     except Exception:
-        raise ValueError("this picture could not be read") from None
+        raise ValueError("Bu resim okunamadı.") from None
     remove_logo()
     (branding_dir() / f"logo.{ext}").write_bytes(p.read_bytes())
     return config()
@@ -127,15 +127,15 @@ def remove_logo() -> dict:
 def set_template(src: str) -> dict:
     p = Path(src)
     if p.suffix.lower() != ".docx":
-        raise ValueError("the template must be a Word .docx file")
+        raise ValueError("Şablon bir Word (.docx) dosyası olmalı.")
     if p.stat().st_size > MAX_TEMPLATE:
-        raise ValueError("template is larger than 20 MB")
+        raise ValueError("Şablon 20 MB'tan büyük olamaz.")
     from docx import Document
 
     try:
         Document(str(p))
     except Exception:
-        raise ValueError("this Word file could not be opened") from None
+        raise ValueError("Bu Word dosyası açılamadı.") from None
     template_path().write_bytes(p.read_bytes())
     return config()
 

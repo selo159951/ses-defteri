@@ -2,7 +2,7 @@
 and the microphone, at the same time.
 
 - Each source is captured in its own thread (soundcard, WASAPI loopback for the speakers), turned into 16 kHz mono
-  and appended to its own raw file in %APPDATA%\\SesDefteri\\recordings\\<time>\\ every 0.1 s. A crash or power cut
+  and appended to its own raw file in %APPDATA%\\SesDefteriBasit\\recordings\\<time>\\ every 0.1 s. A crash or power cut
   loses at most a moment: the next start offers to recover the recording.
 - Stop mixes the two tracks into one WAV and queues it like a dropped file (speakers, names, analysis as usual).
 - Optional live text (main edition): see LiveWriter. It is only a preview; the full processing runs after Stop.
@@ -146,7 +146,7 @@ class MeetingRecorder:
 
     def __init__(self, devices: dict, folder: Path | None = None, on_audio=None):
         if not devices:
-            raise RuntimeError("no microphone or speaker found")
+            raise RuntimeError("Mikrofon ya da hoparlör bulunamadı")
         stamp = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
         self.folder = folder or recordings_dir() / stamp
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -242,7 +242,7 @@ def finish(folder: Path) -> Path:
     tracks = [read_pcm(folder / f"{s}.pcm") for s in SOURCES]
     audio = mix(tracks)
     if len(audio) < SR:  # under a second: nothing worth processing
-        raise ValueError("the recording is empty")
+        raise ValueError("Kayıt boş: en az bir saniye ses gerekiyor")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", meta.get("title") or folder.name).strip() or "Toplanti"
     out = folder / f"{name}.wav"
     write_wav(out, audio)
@@ -286,7 +286,7 @@ def recover(name: str) -> Path:
     try:
         meta = json.loads((folder / "meta.json").read_text("utf-8"))
     except (OSError, ValueError):
-        raise ValueError("this recording was not found") from None
+        raise ValueError("Bu kayıt bulunamadı") from None
     if meta.get("state") == "mixed" and (folder / str(meta.get("wav", ""))).is_file():
         return folder / meta["wav"]
     return finish(folder)

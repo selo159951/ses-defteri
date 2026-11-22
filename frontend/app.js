@@ -258,7 +258,13 @@ function watch(id, name) {
     }
     if (j.status === "done") return finished(id);
     window.renderProgress(j, name);
-    if (["error", "paused", "interrupted"].includes(j.status)) return loadJobs();
+    if (j.status === "error" || j.status === "interrupted") {
+      // this job will not continue by itself: let the box follow the next running job
+      // (a paused job keeps the box, because it carries the "Devam et" button)
+      watching = null;
+      return loadJobs();
+    }
+    if (j.status === "paused") return loadJobs();
     setTimeout(tick, 1000);
   };
   tick();
@@ -777,7 +783,11 @@ $("expGo").onclick = async () => {
   const v = $("expVersion").value, f = $("expFmt").value;
   const who = v === "analysis" ? [] : selectedWho();
   $("expGo").closest("details").open = false;
-  reportSaved(await call("save_export", job.id, v, f, LANG, who)); // native "Save as" dialog
+  try {
+    reportSaved(await call("save_export", job.id, v, f, LANG, who)); // native "Save as" dialog
+  } catch (e) {
+    toast(t("export_failed") + (e?.message || e));
+  }
 };
 $("wordBtn").onclick = async () => { // one click: edited transcript as .docx, only the Save dialog in between
   await save();

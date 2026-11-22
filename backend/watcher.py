@@ -132,7 +132,9 @@ class Watcher:
             return []
         folder = Path(c["dir"])
         try:
-            entries = [e for e in os.scandir(folder) if e.is_file() and is_candidate(e.name)]
+            # close the directory handle at once: otherwise Windows keeps the folder busy
+            with os.scandir(folder) as it:
+                entries = [e for e in it if e.is_file() and is_candidate(e.name)]
         except OSError:
             self.note = "missing"
             self._pending.clear()

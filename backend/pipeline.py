@@ -400,8 +400,7 @@ def _transcribe_and_finish(job_id, jp, job, samples, duration, parts, device, pa
     langs: Counter = Counter()
     last_t = [0.0]
     t_asr = time.time()
-    if not (resume and (part_dir / "0.json").exists()) or True:
-        asr.detect_languages(asr_samples)  # which language(s) the whole recording is in (one cheap pass)
+    asr.detect_languages(asr_samples)  # which language(s) the whole recording is in (one cheap pass)
     for i, (a, b) in enumerate(parts):
         _check(job_id)
         push(part=i + 1)
