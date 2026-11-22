@@ -34,15 +34,22 @@ let jobsTimer = null, jobsLoaded = false;
 
 async function loadJobs() {
   const q = $("jq").value.trim();
-  if (window.semActive?.(q)) return window.semLoad(q); // search by meaning (search.js) takes over the list
+  if (window.semActive?.(q)) { $("bulkBar").hidden = true; return window.semLoad(q); } // search by meaning (search.js) takes over the list
   if (!jobsLoaded) skeleton($("jobs"), "list"); // first load: rows in the shape of the list
   let list = await call("list_jobs", q);
+  const ids = new Set(list.map((j) => j.id)); // a checked job stays checked across reloads
+  checkedJobs = new Set([...checkedJobs].filter((id) => ids.has(id)));
   const langs = [...new Set(list.map((j) => j.language).filter(Boolean))].sort();
   const lf = $("jLang"), curLang = lf.value;
   lf.replaceChildren(new Option(t("all_languages"), ""), ...langs.map((l) => new Option(l.toUpperCase(), l)));
   lf.value = langs.includes(curLang) ? curLang : "";
-  const st = $("jStatus").value, lang = lf.value;
-  list = list.filter((j) => (!st || (st === "running" ? ["running", "queued"].includes(j.status) : j.status === st)) && (!lang || j.language === lang));
+  try { allTags = await call("list_tags"); } catch (e) { allTags = allTags || []; } // every tag in use, also behind other filters
+  const tf = $("jTag"), curTag = tf.value;
+  tf.replaceChildren(new Option(t("all_tags"), ""), ...allTags.map((x) => new Option(x, x)));
+  tf.value = allTags.includes(curTag) ? curTag : "";
+  const st = $("jStatus").value, lang = lf.value, star = $("jStar").value === "1", tag = tf.value;
+  list = list.filter((j) => (!st || (st === "running" ? ["running", "queued"].includes(j.status) : j.status === st)) && (!lang || j.language === lang)
+    && (!star || j.starred) && (!tag || (j.tags || []).includes(tag)));
   const sorters = {
     new: (a, b) => b.created - a.created, old: (a, b) => a.created - b.created,
     name: (a, b) => a.filename.localeCompare(b.filename, LANG),
@@ -50,7 +57,7 @@ async function loadJobs() {
   };
   list.sort(sorters[$("jSort").value]);
   $("jobCount").textContent = list.length ? `(${list.length})` : "";
-  const box = $("jobsEmpty"), filtered = q || st || lang;
+  const box = $("jobsEmpty"), filtered = q || st || lang || star || tag;
   box.hidden = !!list.length;
   if (!list.length) {
     box.replaceChildren(emptyState("folder", t(filtered ? "no_match_title" : "no_rec_title"), t(filtered ? "no_match_rec" : "no_rec"),
@@ -58,7 +65,53 @@ async function loadJobs() {
     if (q) window.semOffer?.(box, q); // no keyword hit: offer the search by meaning
   } else box.replaceChildren();
   $("jobs").replaceChildren(...list.map((j) => jobRow(j, q)));
+  renderBulk();
   if (!jobsLoaded) { jobsLoaded = true; if (list.length) fadeIn($("jobs")); }
+}
+
+/* star, tags, bulk selection */
+let checkedJobs = new Set(), allTags = [];
+
+function renderBulk() {
+  const bar = $("bulkBar");
+  bar.hidden = !checkedJobs.size;
+  if (!checkedJobs.size) return;
+  const exp = el("button", { className: "small" }, icText("download", t("bulk_export")));
+  exp.onclick = async () => {
+    try { reportSaved(await call("export_jobs", [...checkedJobs], "docx", LANG)); } // one folder, every edited transcript as .docx
+    catch (e) { toast(t("export_failed") + (e?.message || e)); }
+  };
+  const del = el("button", { className: "small" }, icText("trash", t("delete")));
+  del.onclick = async () => {
+    if (!confirm(t("bulk_delete_confirm", { n: checkedJobs.size }))) return;
+    try { await call("delete_jobs", [...checkedJobs]); } catch (e) { toast((e?.message || e)); return; }
+    checkedJobs.clear(); renderBulk(); loadJobs();
+  };
+  const clr = el("button", { className: "small", textContent: t("bulk_clear") });
+  clr.onclick = () => { checkedJobs.clear(); renderBulk(); loadJobs(); };
+  bar.replaceChildren(el("span", { className: "bulkn", textContent: t("bulk_selected", { n: checkedJobs.size }) }),
+    el("span", { className: "spacer" }), exp, del, clr);
+}
+
+/* the tags of one recording: chips in the row, edited through an input with the existing tags as suggestions */
+function tagEditor(j, box) {
+  const dlId = "tagdl-" + j.id;
+  const inp = el("input", { value: (j.tags || []).join(", "), placeholder: t("tags_ph") });
+  inp.setAttribute("list", dlId); // the list property is read-only, the attribute is what counts
+  const dl = el("datalist", { id: dlId }, ...allTags.map((x) => el("option", { value: x })));
+  const save = async () => {
+    const tags = inp.value.split(",").map((s) => s.trim()).filter(Boolean);
+    try { await call("set_job_tags", j.id, tags); } catch (e) { toast(t("save_failed")); }
+    loadJobs();
+  };
+  inp.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); save(); }
+    if (e.key === "Escape") loadJobs();
+  };
+  const go = el("button", { className: "small", textContent: t("save_btn"), onclick: save });
+  const no = el("button", { className: "small", textContent: t("cancel_btn"), onclick: () => loadJobs() });
+  box.replaceChildren(el("span", { className: "jtagedit" }, inp, go, no), dl);
+  inp.focus();
 }
 
 function jobRow(j, q) {
@@ -81,6 +134,14 @@ function jobRow(j, q) {
     : anState === "done" ? el("span", { className: "badge done", textContent: t("badge_analysis_ready") }) : null;
   const info = el("div", { className: "jinfo" }, el("div", {}, title, " ", badge, ...(anBadge ? [" ", anBadge] : [])),
     el("div", { className: "jmeta", textContent: meta }));
+  const tags = j.tags || [];
+  const tagBox = el("div", { className: "jtags" });
+  for (const tag of tags) { // a chip filters the list to this tag
+    const chip = el("button", { className: "jtag", textContent: tag, title: t("tag_filter_title") });
+    chip.onclick = () => { if ($("jTag").value === tag) { $("jTag").value = ""; } else $("jTag").value = tag; loadJobs(); };
+    tagBox.append(chip);
+  }
+  if (tags.length) info.append(tagBox);
   if (q) { // where the search term was found
     const where = [];
     if (j.name_match) where.push(t("in_name"));
@@ -103,7 +164,11 @@ function jobRow(j, q) {
   };
   const del = el("button", { textContent: t("delete"), className: "small" });
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
-  const btns = el("div", { className: "jbtns" }, ren, j.status === "queued" ? "" : del); // waiting in line: cancel (below) instead of delete
+  const star = el("button", { className: "small icon jstar" + (j.starred ? " on" : ""), title: t("star_title") }, ic("star"));
+  star.onclick = async (e) => { e.preventDefault(); try { await call("set_job_star", j.id, !j.starred); } catch (err) { /* shown next time */ } loadJobs(); };
+  const tag = el("button", { textContent: t("tags_btn"), className: "small" });
+  tag.onclick = () => { info.append(tagBox); tagEditor(j, tagBox); }; // the chips give way to the input
+  const btns = el("div", { className: "jbtns" }, star, tag, ren, j.status === "queued" ? "" : del); // waiting in line: cancel (below) instead of delete
   if (j.status === "running" || j.status === "queued") {
     const pz = el("button", { className: "small" }, icText("pause", t("pause")));
     pz.onclick = async () => { try { await call("pause_job", j.id); } catch {} loadJobs(); };
@@ -116,10 +181,12 @@ function jobRow(j, q) {
     res.onclick = () => resume(j.id);
     btns.prepend(res);
   }
-  return el("li", {}, info, btns);
+  const cb = el("input", { type: "checkbox", className: "jcheck", checked: checkedJobs.has(j.id) });
+  cb.onchange = () => { cb.checked ? checkedJobs.add(j.id) : checkedJobs.delete(j.id); renderBulk(); };
+  return el("li", {}, cb, info, btns);
 }
 $("jq").oninput = () => { clearTimeout(jobsTimer); jobsTimer = setTimeout(loadJobs, 250); };
-for (const id of ["jStatus", "jLang", "jSort"]) $(id).onchange = loadJobs;
+for (const id of ["jStatus", "jLang", "jStar", "jTag", "jSort"]) $(id).onchange = loadJobs;
 
 /* Files are read from disk by path: dropped files are handled by Python (it gets the full path),
    "browse" opens the native Open dialog (several files allowed). Both end up in onJobsStarted; files are processed
