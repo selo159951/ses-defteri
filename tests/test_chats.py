@@ -221,3 +221,8 @@ def test_bridge_autotitle(api, monkeypatch):
     api.chat_rename(s["id"], "Benim adım")
     assert api.chat_autotitle(s["id"], "başka soru", "a", "tr") == {"title": "Benim adım"}
     assert api.chat_autotitle("nope", "q", "a", "tr") == {"error": "not_found"}
+
+
+def test_make_title_reads_the_json_answer():
+    gen = lambda p, **kw: {"baslik": "Mobil uygulama çıkışı"}
+    assert chat.make_title("Çıkış tarihi ne zaman?", "a", "tr", generate=gen) == "Mobil uygulama çıkışı"

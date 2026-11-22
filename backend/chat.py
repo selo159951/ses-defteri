@@ -77,6 +77,9 @@ def small_talk(question: str, lang: str) -> str | None:
     return last[lang]
 
 
+TITLE_SCHEMA = {"type": "object", "properties": {"baslik": {"type": "string"}}, "required": ["baslik"]}
+
+
 def make_title(question: str, answer: str, lang: str = "tr", generate=None) -> str:
     """A short title for a saved conversation, written by the model in the question's language.
     Small talk is not worth a model call; any problem falls back to the first words of the question."""
@@ -90,8 +93,10 @@ def make_title(question: str, answer: str, lang: str = "tr", generate=None) -> s
     system = ("Bu sohbet için 2-5 kelimelik kısa bir başlık üret. "
               f"{'Türkçe' if lang == 'tr' else 'English'} yaz. Sadece başlığı yaz: tırnak işareti ve nokta olmadan.")
     try:
-        out = str(generate(f"Soru: {question}\n\nCevap: {(answer or '')[:400]}", system=system,
-                           max_tokens=24, temperature=0.2))
+        # a schema, like the other calls: free text from a thinking model can be cut off inside its thinking
+        out = generate(f"Soru: {question}\n\nCevap: {(answer or '')[:400]}", schema=TITLE_SCHEMA, system=system,
+                       max_tokens=80, temperature=0.2)
+        out = str(out.get("baslik") or "") if isinstance(out, dict) else str(out)
         out = out.strip().splitlines()[0].strip() if out.strip() else ""
         out = re.sub(r"[*_`#>]+", "", out).strip().strip("\"'“”‘’").strip().rstrip(" .,!?…:;").strip()
         if out:
