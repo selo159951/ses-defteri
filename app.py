@@ -45,6 +45,12 @@ def main():
         return _fatal(f"The app could not start:\n{e}")
 
     store.mark_interrupted()  # jobs cut off by closing the app can be resumed (after migrate_old_data)
+    try:  # Settings > Recording: keep transcripts, drop the audio of recordings older than N days
+        from backend import disk
+
+        disk.purge_old_audio()
+    except Exception as e:
+        print("old audio cleanup:", e, file=sys.stderr)
     if sys.platform == "win32":
         install_virtual_hosts()
     api = Api()
@@ -54,9 +60,16 @@ def main():
         semantic.start_worker()
     except Exception as e:
         print("search indexing could not start:", e, file=sys.stderr)
+    # --tray (written by "start with Windows"): no window, only the tray icon
+    from backend import autostart, tray
+
+    start_hidden = autostart.started_in_tray() and tray.available()
+    if start_hidden:
+        start_hidden = api.start_tray()  # no tray icon: show the window instead of hiding with no way back
+    api.apply_tray()  # the tray setting remembered in Settings
     # starts maximized; the size below is what "restore down" gives
     window = webview.create_window("Ses Defteri", START_URL, width=1180, height=820,
-                                   min_size=(720, 560), maximized=True, js_api=api)
+                                   min_size=(720, 560), maximized=True, hidden=start_hidden, js_api=api)
     api._get_window = lambda: window
     attached = []
 
@@ -68,6 +81,13 @@ def main():
         api.apply_zoom()  # the interface size from Settings
 
     window.events.loaded += on_loaded
+
+    def on_closing():
+        # Returning False cancels the close: the window hides and the tray icon stays.
+        return not api.tray_hide_on_close()
+
+    window.events.closing += on_closing
+    api.start_meeting_detector()  # microphone consent store: "a meeting has started" suggestion
     try:
         webview.start(gui="edgechromium" if sys.platform == "win32" else None, icon=str(ICON),
                       private_mode=False, storage_path=str(store.data_dir() / "webview"))

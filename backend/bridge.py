@@ -12,7 +12,7 @@ import sys
 import threading
 from pathlib import Path
 
-from . import asr, denoise, export, store, updater, version
+from . import asr, autostart, denoise, disk, export, store, tray, updater, version
 from . import pipeline
 from .watcher import Watcher
 from .pipeline import run_job
@@ -100,6 +100,9 @@ class Api(SystemApi, LlmApi, SearchApi):
 
     def __init__(self, window_getter=None):
         self._get_window = window_getter
+        self._tray = None
+        self._detector = None
+        self._quitting = False
         self._watcher = Watcher(self.start_jobs)
         if self._watcher.config()["enabled"]:
             self._watcher.start()
@@ -156,12 +159,18 @@ class Api(SystemApi, LlmApi, SearchApi):
             raise SkipFile("missing", f'"{src.name}" was not found.')
         if src.suffix.lower() not in MEDIA_SUFFIXES:
             raise SkipFile("not_media", f'"{src.name}" is not an audio or video file, skipped.')
+        space = disk.check()
+        if space["state"] == "full":
+            raise SkipFile("disk_full", "There is not enough free disk space to process this file.")
         job_id = store.create_job(src.name)  # a new folder per job: the same file twice gives two separate jobs
         store.update_job(job_id, source_path=str(src))
         pipeline.enqueue(job_id)  # here, not in the thread: the thread start order is not reliable
         threading.Thread(target=run_job, args=(job_id, src), kwargs={"keep_source": True},
                          daemon=True).start()
-        return {"id": job_id, "filename": src.name}
+        out = {"id": job_id, "filename": src.name}
+        if space["state"] == "low":
+            out["warning"] = {"code": "disk_low", "free": space["free"]}
+        return out
 
     def start_jobs(self, paths: list) -> list:
         """Start several files in the given order. A file that cannot be used does not stop the others:
@@ -256,15 +265,25 @@ class Api(SystemApi, LlmApi, SearchApi):
 
     # ---------------- settings ----------------
     def get_settings(self) -> dict:
-        return {**asr.status(), "meeting_mode": bool(asr.get_settings().get("meeting_mode", False)), "language": asr.language_mode(),
-                "learn_people": bool(asr.get_settings().get("learn_people", True)),
-                "denoise": denoise.normalize_mode(asr.get_settings().get("denoise")),
-                "denoise_ask": asr.get_settings().get("denoise_ask", True) is not False,
+        s = asr.get_settings()
+        try:
+            purge_days = int(s.get("purge_audio_days", 0) or 0)
+        except (TypeError, ValueError):
+            purge_days = 0
+        if purge_days not in disk.PURGE_DAYS:
+            purge_days = 0
+        return {**asr.status(), "meeting_mode": bool(s.get("meeting_mode", False)), "language": asr.language_mode(),
+                "learn_people": bool(s.get("learn_people", True)),
+                "denoise": denoise.normalize_mode(s.get("denoise")),
+                "denoise_ask": s.get("denoise_ask", True) is not False,
                 "denoise_threshold": round(denoise.current_threshold(), 1),
                 "denoise_answers": len(denoise.answers()),
-                "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
-                "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
-                "update_check": updater.enabled(), "ui_zoom": ui_zoom(), **self._rec_settings()}
+                "tour_home_done": bool(s.get("tour_home_done", False)),
+                "tour_job_done": bool(s.get("tour_job_done", False)),
+                "update_check": updater.enabled(), "ui_zoom": ui_zoom(), **self._rec_settings(),
+                "purge_audio_days": purge_days, "meeting_suggest": s.get("meeting_suggest", True) is not False,
+                "tray_enabled": s.get("tray_enabled") is True, "tray_available": tray.available(),
+                "start_with_windows": autostart.enabled(), "autostart_available": autostart.supported()}
 
     def set_settings(self, values: dict) -> dict:
         if "use_gpu" in values:
@@ -294,7 +313,78 @@ class Api(SystemApi, LlmApi, SearchApi):
                 asr.set_setting(key, bool(values[key]))
         if "rec_mic_id" in values:
             asr.set_setting("rec_mic_id", str(values["rec_mic_id"] or "")[:300])
+        if "purge_audio_days" in values:
+            try:
+                days = int(values["purge_audio_days"] or 0)
+            except (TypeError, ValueError):
+                days = 0
+            asr.set_setting("purge_audio_days", days if days in disk.PURGE_DAYS else 0)
+        if "meeting_suggest" in values:
+            asr.set_setting("meeting_suggest", bool(values["meeting_suggest"]))
+        if "tray_enabled" in values:
+            asr.set_setting("tray_enabled", bool(values["tray_enabled"]))
+            self.apply_tray()
+        if "start_with_windows" in values:
+            autostart.set_enabled(bool(values["start_with_windows"]))
         return self.get_settings()
+
+    # ---------------- tray & start with Windows ----------------
+    def apply_tray(self) -> None:
+        """Start or stop the tray icon to match the setting (called after the setting changes)."""
+        want = asr.get_settings().get("tray_enabled") is True
+        if want:
+            self.start_tray()
+        elif self._tray is not None:
+            self._tray.stop()
+            self._tray = None
+
+    def start_tray(self) -> bool:
+        if self._tray is not None:
+            return True
+        if not tray.available():
+            return False
+        self._tray = tray.Tray(self, self._window)
+        if not self._tray.start():
+            self._tray = None
+            return False
+        return True
+
+    def tray_hide_on_close(self) -> bool:
+        """The window's close button: hide to the tray instead of quitting (only when enabled)."""
+        if getattr(self, "_quitting", False) or self._tray is None:
+            return False
+        if asr.get_settings().get("tray_enabled") is not True:
+            return False
+        try:
+            self._window().hide()
+        except Exception:
+            return False
+        return True
+
+    def quit_from_tray(self) -> dict:
+        self._quitting = True
+        if self._tray is not None:
+            self._tray.stop()
+            self._tray = None
+        try:
+            self._window().destroy()
+        except Exception:
+            pass
+        return {"ok": True}
+
+    # ---------------- meeting detection (microphone use by Teams / Zoom / browser) ----------------
+    def start_meeting_detector(self) -> None:
+        from . import meeting_detect
+
+        if sys.platform != "win32" or self._detector is not None:
+            return
+        self._detector = meeting_detect.Detector()
+        self._detector.start()
+
+    def meeting_detect_status(self) -> dict:
+        enabled = asr.get_settings().get("meeting_suggest", True) is not False
+        st = self._detector.snapshot() if self._detector else {"active": False, "app": None, "name": None}
+        return {"enabled": enabled, **st, "recording": bool(getattr(self, "_rec", None))}
 
     # ---------------- meeting recording (computer sound + microphone) ----------------
     LIVE_TEXT = True  # the simple edition has no live text
@@ -371,6 +461,9 @@ class Api(SystemApi, LlmApi, SearchApi):
 
         if getattr(self, "_rec", None):
             return self.rec_status()
+        space = disk.check()
+        if space["state"] == "full":
+            return {"active": False, "error": "disk_full", "free": space["free"]}
         s = self._rec_settings()
         devices = meeting_recorder.open_devices(s["rec_system"], s["rec_mic"], s["rec_mic_id"] or None)
         if not devices:
@@ -380,7 +473,10 @@ class Api(SystemApi, LlmApi, SearchApi):
         self._rec.start()
         if live if live is not None else s["live_default"]:
             self._start_live()
-        return self.rec_status()
+        out = self.rec_status()
+        if space["state"] == "low":  # starts anyway; the page warns once after this answer
+            out["warning"] = {"code": "disk_low", "free": space["free"]}
+        return out
 
     def _feed_live(self, source, samples) -> None:
         live = getattr(self, "_live", None)
