@@ -28,20 +28,20 @@ Kaynak: kullanıcının 22.11.2026 akşamki istekleri. Sırayla yapılır, her a
   - Teşhis: yalnızca bilgisayar sesiyle yapılan gerçek kayıtta iki konuşmacı doğru ayrılıyor. Mikrofon açıkken her şey tek konuşmacıya düşüyordu.
 
 ## Yapılacaklar (sırayla)
-1. [ ] **Karıştırma düzeltmesini doğrula**
+1. [x] **Karıştırma düzeltmesini doğrula** (8f68af6; gerçek mikrofonlu kayıtta iki konuşmacı doğru ayrıldı)
    - Daha güçlü yapay yankıyla (`scratchpad/mix_exp.py`: yankı 0.5 ve uzun oda yankısı) eski yöntemin bozulduğunu, yenisinin ayırdığını göster.
    - `mix()` için birim test: hoparlör sesi varken mikrofon kısılıyor, kullanıcının kendi sesi korunuyor.
    - Kullanıcı mikrofonu açınca gerçek kayıtla tekrar dene: `play_dialog.py` + `start_meeting`.
    - Test ses dosyaları: `scratchpad/teams/l1..l8.mp3`, `diyalog.wav` (EVREN tts, emre/ece).
-2. [ ] **Hitaptan konuşmacı adı**
+2. [x] **Hitaptan konuşmacı adı** (8d6d6b5, EVREN glm-5.3)
    - "Günaydın Ece", "Ece, …", "…, Ece?" gibi hitaplarda adı söyleyen kişiye değil, ondan sonra konuşan farklı kişiye ver.
    - Ad bulma kuralları "ben Selim", "Umut sen…" ile aynı yerde: `backend/` içinde ad bulan modül (grep `benim adım`).
    - Test: sanal diyalogda Konuşmacı 2 → Ece.
-3. [ ] **Konuşmacı seçicisi**: satırlardaki açılır kutu adı kesiyor ("Konuşmacı 1" sığmıyor). Kutuyu genişlet veya içeriğe göre boyutlandır, bütün yakınlaştırma oranlarında kontrol et.
-4. [ ] **Ayarlar sekmeleri sabit kalsın** (iPhone Ayarlar gibi): sol sekme listesi yerinde dursun, yalnızca sağ taraf kaysın ve değişsin. Yöntem: `.slayout` için yükseklik `calc(100vh - üst)` ve `.sbody` için `overflow:auto`, ya da `.stabs` için `position:sticky`; ana kaydırma sağ panelde olsun.
-5. [ ] **Sistem sayfasına da sekmeler**: Ayarlar'daki düzenin aynısı. Örnek gruplar: Donanım, Konuşma motoru ve modeller, Toplantı modu (LLM), Anlam arama, Gürültü, Klasör izleme. `system.js` veya app.js içindeki sistem bölümüne bak.
-6. [ ] **Boş sayfalar**: sayfanın ortası boş kalmasın. Simgeli, ortalanmış bir boş durum gösterilsin ("Henüz kayıtlı kişi yok" + ne işe yaradığı + düğme): Kişiler, Asistan ilk açılış, kayıt listesi boşken, Öğrenilen düzeltmeler. Sayfalardaki küçük yazılar (12–13 px) büyütülsün: `.hint`, `.pmeta`, sayfa açıklamaları en az 14–15 px.
-7. [ ] **Her sayfada iskelet (skeleton) yükleme**: Asistan, Kişiler, Ayarlar, Sistem, kayıt açılışı, Analiz sekmesi. `skeleton.js` (`skeleton(root, kind)`) var; eksik sayfalara ekle ve türleri genişlet.
+3. [x] **Konuşmacı seçicisi** (0b84c27, EVREN deepseek): satırlardaki açılır kutu adı kesiyor ("Konuşmacı 1" sığmıyor). Kutuyu genişlet veya içeriğe göre boyutlandır, bütün yakınlaştırma oranlarında kontrol et.
+4. [x] **Ayarlar sekmeleri sabit kalsın** (0b84c27, EVREN deepseek) (iPhone Ayarlar gibi): sol sekme listesi yerinde dursun, yalnızca sağ taraf kaysın ve değişsin. Yöntem: `.slayout` için yükseklik `calc(100vh - üst)` ve `.sbody` için `overflow:auto`, ya da `.stabs` için `position:sticky`; ana kaydırma sağ panelde olsun.
+5. [x] **Sistem sayfasına da sekmeler** (0b84c27, EVREN deepseek): Ayarlar'daki düzenin aynısı. Örnek gruplar: Donanım, Konuşma motoru ve modeller, Toplantı modu (LLM), Anlam arama, Gürültü, Klasör izleme. `system.js` veya app.js içindeki sistem bölümüne bak.
+6. [x] **Boş sayfalar** (0b84c27, EVREN deepseek): sayfanın ortası boş kalmasın. Simgeli, ortalanmış bir boş durum gösterilsin ("Henüz kayıtlı kişi yok" + ne işe yaradığı + düğme): Kişiler, Asistan ilk açılış, kayıt listesi boşken, Öğrenilen düzeltmeler. Sayfalardaki küçük yazılar (12–13 px) büyütülsün: `.hint`, `.pmeta`, sayfa açıklamaları en az 14–15 px.
+7. [x] **Her sayfada iskelet (skeleton) yükleme**: Asistan, Kişiler, Ayarlar, Sistem, kayıt açılışı, Analiz sekmesi. `skeleton.js` (`skeleton(root, kind)`) var; eksik sayfalara ekle ve türleri genişlet.
 8. [ ] **Tüm oranları kontrol et**
    - `scratchpad/overflow.js` (CDP): %100, %125, %150, %175 yakınlaştırmada ve dar pencerede (1024×700, 800×600) bütün sayfalarda yatay taşma olmamalı.
    - Menü katlı ve açık hâllerinde ekran görüntüsü al.
@@ -59,6 +59,15 @@ Kaynak: kullanıcının 22.11.2026 akşamki istekleri. Sırayla yapılır, her a
       - Sunucu: `ftp.selimoguz.com.tr`, kök klasör `/ses-defteri/`. `curl -k --ssl-reqd`, çünkü sertifika adı tutmuyor.
     - Bu bilgisayardaki kurulu sürümü (NVIDIA) güncelle.
 11. [ ] Hafızayı güncelle; kullanıcıya özet ver.
+
+## Bu oturumda eklenenler (yapıldı)
+- [x] Kişi ekleme ve ses kaydı açılır pencerede (0b84c27).
+- [x] Asistan: kayıtlı sohbetler, sağda liste, + yeni sohbet, ⋮ ad değiştir/sil, yapay zekâ başlığı (b0a5992, d7c3de3, JSON başlık).
+- [x] Konuşmacı ayırma ayrı işlemde: uzun kayıtta pencere donmuyor, 2x hızlı (1b2eb0c).
+- [x] Yarım kalan kayıt bir kez sıraya giriyor (1b2eb0c). Liste animasyonu döngüsü (99da40d).
+- [x] Model "kapsam dışı" dese de kelimeler kayıtta geçiyorsa aranıyor (b98d1cf).
+- [x] Basit: EVREN incelemesinin ilk düzeltmeleri (Basit 14b55df). İnceleme yarım; kalanı adım 9'da.
+- [ ] Ana sürüme de: kurtarılan kaydın ham WAV'ı iş bitince silinsin (Basit'teki `_drop_recording_source`).
 
 ## Notlar
 - Test kopyası: `SESDEFTERI_HOME=scratchpad\uihome` ve `SESDEFTERI_MODEL_DIR=%APPDATA%\SesDefteri\models`, CDP portu 9333.
