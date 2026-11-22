@@ -6,18 +6,18 @@
   "files": {
     "standart": {
       "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Setup.exe",
-      "size": 162462312,
-      "sha256": "ddc2ee3254742b28b61334008b61819835c86b8795859222d15ff8c4beb6ad7a"
+      "size": 162462048,
+      "sha256": "58ee7c59bf738f64c19322ce0f10797764640f28a145e1ed23312616cdefb77c"
     },
     "nvidia": {
       "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-NVIDIA-Setup.exe",
-      "size": 1184625328,
-      "sha256": "87a9c3bb326d043ff61af3ef8354259f64ebd182bc21a1b93964a59726e2dddb"
+      "size": 1184625040,
+      "sha256": "50140d3375d6e8e18e1f4d492d09704fe6ace10ad5a814e8211db9572b46661c"
     },
     "basit": {
       "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Basit-Setup.exe",
-      "size": 147373040,
-      "sha256": "9391ab69c2c2c8cdd7978936cf4c159b511b63f08ff884f92af4ae077587f61a"
+      "size": 147372840,
+      "sha256": "10275281ee42d7ba91addfdcc0a558c702409c6dfc3d39c53a5ee2dc34bae214"
     }
   }
 }

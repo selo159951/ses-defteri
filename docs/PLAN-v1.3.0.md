@@ -363,3 +363,10 @@ Kullanıcının isteği: "kalan aşamaları sırayla tamamla, sonra kapsamlı te
   7. [ ] GitHub: commit+push, `gh release create v1.3.0 --draft`, dosyalar `bash tools/dev/upload.sh v1.3.0 <dosyalar>` (Basit setup da), boyutları kontrol, `--draft=false --latest`.
   8. [ ] `tools/make_release_json.py` → site/ses-defteri/surum.json; kullanıcıya "site/ses-defteri klasörünü selimoguz.com.tr/ses-defteri/'ye yükle" notu (OKU.txt'ye de yaz).
   9. [ ] Hafıza (ses-defteri-status.md) güncelle, sonra `shutdown /s /t 60` ile PC'yi kapat (kullanıcı istedi). Yüklemeler bitmeden kapatma.
+
+### 02:50 ilerleme
+- [x] Paket kontrolü: soundcard paketli exe'de çalışıyor; edition.txt Set-Content ile yazılmıyordu → .NET (3ee0a5e, Basit e4d308b)
+- [x] Basit derlendi, imzalı; README + .claude/release-notes-1.3.0.md
+- [x] NVIDIA 1.3.0 bu PC'ye sessiz kuruldu: 26 kayıt, 'Sürüm 1.3.0 · NVIDIA'
+- [x] Güncelleme döngüsü: DETACHED_PROCESS yüzünden kurulum başlamıyordu → düzeltildi (f2e5e9f, Basit f3c674c); elle doğrulandı (70 sn'de yeniden açıldı)
+- [ ] Yeniden derleme (byp0p0mfr) → uygulama içi döngüyü tekrar test et → surum.json yeniden üret → GitHub
