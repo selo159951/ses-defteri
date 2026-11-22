@@ -230,3 +230,25 @@ def test_live_text_error_stops_cleanly():
     while lw.state == "running" and time.monotonic() < deadline:
         time.sleep(0.02)
     assert lw.state == "error" and "model missing" in lw.error
+
+
+def _tone(sec, hz, amp, sr=16000):
+    t = np.arange(int(sec * sr)) / sr
+    return (amp * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+
+
+def test_mix_turns_down_the_speaker_echo_and_keeps_the_users_voice():
+    sr = 16000
+    rng = np.random.default_rng(0)
+    system = np.concatenate([np.zeros(4 * sr, np.float32), _tone(4, 220, 0.3)])  # the other side talks after 4 s
+    mic = rng.normal(0, 0.002, len(system)).astype(np.float32)
+    k = int(0.03 * sr)
+    mic[k:] += system[:-k] * 0.5  # a loud echo of the laptop speakers, as in a real call
+    mic[1 * sr: 2 * sr] += _tone(1, 330, 0.1)  # the user speaks while the computer is silent
+    out = mr.mix([system, mic])
+    rms = lambda a: float(np.sqrt(np.mean(a ** 2)))
+    sys_part = out[5 * sr: 7 * sr]
+    lifted = system[5 * sr: 7 * sr] * min(4.0, 0.25 / mr.speech_level(mr.frame_rms(system, len(system) // mr.FRAME)))
+    assert rms(sys_part - lifted) < 0.15 * rms(lifted)  # echo is barely in the mix: the far side stays one clean voice
+    assert rms(out[int(1.2 * sr): int(1.8 * sr)]) > 0.08  # the user's own voice is kept (and lifted)
+    assert rms(out[int(2.5 * sr): int(3.5 * sr)]) < 0.01  # mic room noise is turned down between words
