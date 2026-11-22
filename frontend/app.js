@@ -30,11 +30,12 @@ function marked(text, q) {
 }
 
 /* ================= home ================= */
-let jobsTimer = null;
+let jobsTimer = null, jobsLoaded = false;
 
 async function loadJobs() {
   const q = $("jq").value.trim();
   if (window.semActive?.(q)) return window.semLoad(q); // search by meaning (search.js) takes over the list
+  if (!jobsLoaded) skeleton($("jobs"), "list"); // first load: rows in the shape of the list
   let list = await call("list_jobs", q);
   const langs = [...new Set(list.map((j) => j.language).filter(Boolean))].sort();
   const lf = $("jLang"), curLang = lf.value;
@@ -49,11 +50,15 @@ async function loadJobs() {
   };
   list.sort(sorters[$("jSort").value]);
   $("jobCount").textContent = list.length ? `(${list.length})` : "";
-  $("jobsEmpty").hidden = !!list.length;
-  $("jobsEmpty").textContent = q || st || lang ? t("no_match_rec") : t("no_rec");
-  $("jobsEmpty").classList.toggle("norec", !(q || st || lang)); // no recordings at all: show the app icon above the line
-  if (q && !list.length) window.semOffer?.($("jobsEmpty"), q); // no keyword hit: offer the search by meaning
+  const box = $("jobsEmpty"), filtered = q || st || lang;
+  box.hidden = !!list.length;
+  if (!list.length) {
+    box.replaceChildren(emptyState("folder", t(filtered ? "no_match_title" : "no_rec_title"), t(filtered ? "no_match_rec" : "no_rec"),
+      filtered ? null : { label: t("browse"), onclick: browse }));
+    if (q) window.semOffer?.(box, q); // no keyword hit: offer the search by meaning
+  } else box.replaceChildren();
   $("jobs").replaceChildren(...list.map((j) => jobRow(j, q)));
+  if (!jobsLoaded) { jobsLoaded = true; if (list.length) fadeIn($("jobs")); }
 }
 
 function jobRow(j, q) {

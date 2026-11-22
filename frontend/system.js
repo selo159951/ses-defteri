@@ -32,6 +32,7 @@ Object.assign(I18N.en, {
   wiz_s3: "Quick speed test", wiz_download: "Download the model ({m}, {s})", wiz_ready: "All set - you can add a recording now.",
   wiz_note: "The model is downloaded once; afterwards everything works offline.", back_home: "Start",
   eta_total: "≈ {d} to process", eta_left: "~{d} left", dur_s: "{n} sec", dur_m: "{n} min", dur_h: "{h} h {m} min",
+  sys_tab_hardware: "Computer", sys_tab_models: "Engine and models", sys_tab_ai: "AI tools", sys_tab_details: "Details",
 });
 Object.assign(I18N.tr, {
   system: "Sistem", sys_title: "Bilgisayarınız", sys_chip_title: "Sistem sayfasını aç",
@@ -65,6 +66,7 @@ Object.assign(I18N.tr, {
   wiz_s3: "Kısa hız testi", wiz_download: "Modeli indir ({m}, {s})", wiz_ready: "Hazır - şimdi bir kayıt ekleyebilirsiniz.",
   wiz_note: "Model bir kez indirilir; sonrasında her şey internetsiz çalışır.", back_home: "Başla",
   eta_total: "≈ {d} sürer", eta_left: "kalan ~{d}", dur_s: "{n} sn", dur_m: "{n} dk", dur_h: "{h} sa {m} dk",
+  sys_tab_hardware: "Bilgisayar", sys_tab_models: "Motor ve modeller", sys_tab_ai: "Yapay zekâ araçları", sys_tab_details: "Ayrıntılar",
 });
 
 (() => {
@@ -74,6 +76,7 @@ Object.assign(I18N.tr, {
   const MODEL_KEY = { "large-v3-turbo": "m_large", medium: "m_medium", small: "m_small" };
   const MODEL_DESC = { "large-v3-turbo": "m_large_d", medium: "m_medium_d", small: "m_small_d" };
   let info = null, llm = null, sem = null, wiz = false, pollT = null, lastStatus = null, techOpen = false;
+  let tab = "hardware", lastTab = null;
 
   /* ---------- duration / ETA (also used by watch() in app.js) ---------- */
   function dur(s) {
@@ -111,7 +114,7 @@ Object.assign(I18N.tr, {
   const page = $("system");
   function open() {
     showPage("system");
-    if (!info) skeleton(page, "system"); // first open: placeholder cards while the hardware is read
+    if (!info) skeleton(page, "settings"); // first open: the tabbed page shape while the hardware is read
     refresh();
   }
   function close() { page.hidden = true; }
@@ -141,29 +144,62 @@ Object.assign(I18N.tr, {
 
   function render() {
     if (!info) return;
-    const hw = info.hardware, plan = info.plan, v = info.verdict, set = info.settings;
-    const kids = [el("h2", { textContent: t("sys_title") })];
-    if (wiz) kids.push(wizard());
-    kids.push(el("div", { className: "verdict " + v.level }, ic(v.level === "ok" ? "check" : "alert"), " " + t(v.key)));
-    if (info.settings.engine !== "auto" && plan.fallback_from) kids.push(line(t("plan_fallback"), "warn"));
+    const hw = info.hardware, plan = info.plan, v = info.verdict;
+    const heads = [el("h2", { textContent: t("sys_title") })];
+    if (wiz) heads.push(wizard());
+    heads.push(el("div", { className: "verdict " + v.level }, ic(v.level === "ok" ? "check" : "alert"), " " + t(v.key)));
+    if (info.settings.engine !== "auto" && plan.fallback_from) heads.push(line(t("plan_fallback"), "warn"));
 
-    // hardware cards
+    const tabs = [
+      ["hardware", "cpu", "sys_tab_hardware", () => [hardwareGrid(), speedCard()]],
+      ["models", "download", "sys_tab_models", () => [engineCard(), modelCard()]],
+    ];
+    if (llm || sem) tabs.push(["ai", "sparkles", "sys_tab_ai", () => [...(llm ? [llmCard()] : []), ...(sem ? [semCard()] : [])]]);
+    tabs.push(["details", "info", "sys_tab_details", () => [techCard()]]);
+
+    if (!tabs.some(([id]) => id === tab)) tab = tabs[0][0];
+    const oldBody = page.querySelector(".sbody");
+    const scroll = oldBody && lastTab === tab ? oldBody.scrollTop : 0;
+
+    const fromSkeleton = hasSkeleton(page);
+    page.replaceChildren(...heads, tabbed(tabs));
+    page.querySelector(".sbody").scrollTop = scroll;
+    lastTab = tab;
+    hydrateIcons(page);
+    if (fromSkeleton) fadeIn(page);
+  }
+
+  /* Tabs on the left, one group of cards at a time on the right (same layout as Settings). */
+  function tabbed(tabs) {
+    const nav = el("nav", { className: "stabs", role: "tablist" }, ...tabs.map(([id, icon, key]) => {
+      const b = el("button", { type: "button", role: "tab", className: "stab" + (id === tab ? " on" : ""), textContent: t(key),
+        onclick: () => { tab = id; render(); } });
+      b.setAttribute("aria-selected", String(id === tab));
+      b.dataset.icon = icon;
+      return b;
+    }));
+    const body = el("div", { className: "sbody", role: "tabpanel" }, ...tabs.find(([id]) => id === tab)[3]());
+    return el("div", { className: "slayout" }, nav, body);
+  }
+
+  function hardwareGrid() {
+    const hw = info.hardware, plan = info.plan, set = info.settings;
     const gpuLines = hw.gpus.length
       ? hw.gpus.map((g) => el("div", {}, line(g.name, "strong"),
           line(g.integrated ? t("igpu_shared")
             : [g.vram ? t("vram", { g: gb(g.vram) }) : "", g.free ? t("vram_free", { g: gb(g.free) }) : ""].filter(Boolean).join(" · "), "dim")))
       : [line(t("no_gpu"), "dim")];
     const ram = hw.ram;
-    const grid = el("div", { className: "sgrid" },
+    return el("div", { className: "sgrid" },
       card(t("gpu"), ...gpuLines),
       card(t("cpu"), line(hw.cpu.name, "strong"), line(t("cores_n", { n: hw.cpu.cores }), "dim")),
       card(t("ram"), line(t("ram_total", { g: gb(ram.total) }), "strong"), line(t("ram_free", { g: gb(ram.available) }), "dim")),
       card(t("engine_model"),
         line(devName(plan.device), "strong"),
         line(`${t("model_label")}: ${t(MODEL_KEY[set.model])}`, "dim")));
-    kids.push(grid);
+  }
 
-    // speed
+  function speedCard() {
     const sp = info.speed, tst = info.test;
     const speedBtn = el("button", { className: "primary", textContent: tst.state === "running" ? t("speed_running") : t("speed_run"),
       disabled: tst.state === "running" || !info.model_downloaded || info.download.state === "running" });
@@ -176,17 +212,20 @@ Object.assign(I18N.tr, {
     }
     if (tst.state === "error") speedKids.push(line(t("speed_err", { e: tst.error }), "warn"));
     speedKids.push(speedBtn);
-    kids.push(card(t("speed_title"), ...speedKids));
+    return card(t("speed_title"), ...speedKids);
+  }
 
-    // engine choice
+  function engineCard() {
+    const set = info.settings;
     const sel = el("select");
     info.engines.concat([{ id: "auto", ok: true }]).sort((a, b) => ["auto", "ct2-cuda", "ct2-cpu", "whispercpp"].indexOf(a.id) - ["auto", "ct2-cuda", "ct2-cpu", "whispercpp"].indexOf(b.id))
       .forEach((e) => sel.append(el("option", { value: e.id, disabled: !e.ok, selected: e.id === set.engine,
         textContent: t(ENG_KEY[e.id]) + (e.ok ? "" : ` - ${t("r_" + e.reason)}`) })));
     sel.onchange = async () => { info = await call("set_engine", sel.value); render(); };
-    kids.push(card(t("choose_engine"), sel));
+    return card(t("choose_engine"), sel);
+  }
 
-    // model choice
+  function modelCard() {
     const rows = info.models.map((m) => {
       const dl = info.download, busy = dl.state === "running" && dl.model === m.id;
       const btn = el("button", { className: m.downloaded ? "" : "primary" });
@@ -202,18 +241,12 @@ Object.assign(I18N.tr, {
       if (dl.state === "error" && dl.model === m.id) row.append(line(t("dl_error", { e: dl.error }), "warn"));
       return row;
     });
-    kids.push(card(t("choose_model"), ...rows));
+    return card(t("choose_model"), ...rows);
+  }
 
-    // analysis model (meeting mode)
-    if (llm) kids.push(llmCard());
-    if (sem) kids.push(semCard());
-
-    // technical details
-    const tech = { plan, settings: set, engines: info.engines, hardware: hw };
-    kids.push(el("details", { className: "tech", open: techOpen, ontoggle: (e) => { techOpen = e.target.open; } }, el("summary", { textContent: t("details") }), el("pre", { textContent: JSON.stringify(tech, null, 2) })));
-    const fromSkeleton = hasSkeleton(page);
-    page.replaceChildren(...kids);
-    if (fromSkeleton) fadeIn(page);
+  function techCard() {
+    const tech = { plan: info.plan, settings: info.settings, engines: info.engines, hardware: info.hardware };
+    return el("details", { className: "tech", open: techOpen, ontoggle: (e) => { techOpen = e.target.open; } }, el("summary", { textContent: t("details") }), el("pre", { textContent: JSON.stringify(tech, null, 2) }));
   }
 
   /* Search-by-meaning card: the small embedding model (one download), and how many recordings are ready. */
