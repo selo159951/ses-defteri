@@ -1,5 +1,6 @@
 """Guess speaker names from self-introductions ("ben Selim", "my name is Ana")
-and from being addressed ("Umut sen de bir şey söyle" -> next speaker is Umut)."""
+and from being addressed ("Umut sen de bir şey söyle", "Günaydın Ece", "Ece, rapor hazır mı?",
+"Ne dersin Ece?" -> next different speaker is the named person)."""
 from __future__ import annotations
 
 import re
@@ -17,13 +18,33 @@ SELF_INTRO = [
 # speech-to-text often writes a whole sentence in lower case: "hi my name is melisa"
 LOWER_INTRO = re.compile(rf"\b(?:my name is|ad[ıi]m|ismim)\s+([{LO}]{{3,}}){END}")
 LOWER_STOP = {"not", "also", "now", "here", "just", "very", "john", "ben", "bir", "the", "and", "was", "is", "are"}
-ADDRESS = re.compile(
-    rf"\b{NAME},?\s+(?:sen\b|siz\b|sıra\s+sende|söz\s+sende|buyur|what about you|your turn|go ahead)"
-)
+GREETINGS = "İyi akşamlar|Hoş geldin|Günaydın|Merhaba|Selam|Teşekkürler|Sağ ol|Good morning|Hello|Hi|Thanks"
+HONORIFIC = r"(?:\s+(?:[Bb]ey|[Hh]anım|[Hh]ocam))?"  # "Ece Hanım" -> the name is Ece
+ADDRESS = [
+    # "Umut sen de bir şey söyle", "Ece, buyur"
+    re.compile(rf"\b{NAME},?\s+(?:sen\b|siz\b|sıra\s+sende|söz\s+sende|buyur|what about you|your turn|go ahead)"),
+    # "Günaydın Ece", "Merhaba Ece", "İyi akşamlar Ece", "Good morning Ece"
+    re.compile(rf"\b(?:{GREETINGS})\s*,?\s+{NAME}{END}"),
+    # "Ece, sen ne düşünüyorsun?", "Ece Hanım, bu rapor hazır mı?"
+    re.compile(rf"^\s*{NAME}{HONORIFIC},"),
+    # "Bu rapor hazır mı, Ece?", "Ne dersin Ece?" - only a question to that person
+    re.compile(rf"{NAME}{HONORIFIC}\s*\?\s*$"),
+]
 INTRO_WINDOW = 60  # introductions happen near the start of what someone says
 NOT_NAMES = {"Türkçe", "İngilizce", "Bey", "Hanım", "Hocam", "Tamam", "Evet", "Hayır", "Not", "Sorry", "Here",
              "Fine", "Good", "Glad", "Happy", "Ready", "Back", "Just", "Very", "Also", "Still", "So", "Sure", "Well",
              "English", "Turkish", "Student", "Teacher"}
+# ordinary sentence starters that must not be mistaken for a name someone is called by
+NOT_ADDRESS = {"Bugün", "Yarın", "Dün", "Yani", "Peki", "Şimdi", "Aslında", "Ama", "Fakat", "Sonra", "Önce",
+               "Bence", "Bir", "Bu", "Şu", "O", "Biz", "Siz", "Onlar", "Ben", "Sen", "Hadi", "Haydi", "Evet",
+               "Hayır", "Tamam", "Tabii", "Olur", "Lütfen", "Ne", "Neden", "Nasıl", "Kim", "Hangi", "Nerede",
+               "Merhaba", "Selam", "Günaydın", "Teşekkürler", "Hoş", "Sağ",
+               "Hello", "Hi", "Thanks", "Morning",
+               "Okay", "Yes", "No", "Then", "Now", "Today", "Well", "So", "But", "And", "Please", "What", "Why",
+               "How", "Who", "Where", "You", "Your", "We", "They", "Arkadaşlar", "Beyler", "Hanımlar", "Efendim",
+               "Hocam", "Herkes", "Ekip", "Sevgili", "Değerli", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
+               "Cumartesi", "Pazar", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos",
+               "Eylül", "Ekim", "Kasım", "Aralık", "Friends", "Guys", "Everyone", "Team"}
 
 
 def _is_default(label: str | None, spk: int) -> bool:
@@ -55,6 +76,16 @@ def detect_intros(segments: list[dict]) -> dict[int, str]:
     return {spk: names[0] for spk, names in found.items() if len(names) == 1}
 
 
+def address_name(text: str) -> str | None:
+    """The person the text speaks to ("Umut sen de...", "Günaydın Ece", "Ece, rapor hazır mı?",
+    "Ne dersin Ece?"), or None. A self-introduction ("Merhaba ben Selim") is not an address."""
+    for rx in ADDRESS:
+        m = rx.search(text)
+        if m and m.group(1) not in NOT_NAMES and m.group(1) not in NOT_ADDRESS:
+            return m.group(1)
+    return None
+
+
 def detect_names(segments: list[dict], speakers: dict) -> dict[int, str]:
     """Return {speaker_index: name} for speakers still labelled 'Speaker N'.
     A speaker that introduces itself under two different names is several people the voice
@@ -74,11 +105,11 @@ def detect_names(segments: list[dict], speakers: dict) -> dict[int, str]:
             nm = m.group(1)[0].upper().replace("i", "İ") + m.group(1)[1:] if m.group(1)[0] == "i" else m.group(1).capitalize()
             if nm not in NOT_NAMES and nm not in intros.setdefault(spk, []):
                 intros[spk].append(nm)
-        m = ADDRESS.search(text)
-        if m and m.group(1) not in NOT_NAMES:
+        nm = address_name(text)
+        if nm:
             nxt = next((s for s in segments[i + 1:] if s["speaker"] != spk), None)
             if nxt is not None:
-                weak.setdefault(nxt["speaker"], m.group(1))
+                weak.setdefault(nxt["speaker"], nm)
     crowded = {spk for spk, names in intros.items() if len(names) > 1}
     strong = {spk: names[0] for spk, names in intros.items() if len(names) == 1}
     result: dict[int, str] = {}
