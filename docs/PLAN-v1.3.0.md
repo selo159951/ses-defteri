@@ -370,3 +370,9 @@ Kullanıcının isteği: "kalan aşamaları sırayla tamamla, sonra kapsamlı te
 - [x] NVIDIA 1.3.0 bu PC'ye sessiz kuruldu: 26 kayıt, 'Sürüm 1.3.0 · NVIDIA'
 - [x] Güncelleme döngüsü: DETACHED_PROCESS yüzünden kurulum başlamıyordu → düzeltildi (f2e5e9f, Basit f3c674c); elle doğrulandı (70 sn'de yeniden açıldı)
 - [ ] Yeniden derleme (byp0p0mfr) → uygulama içi döngüyü tekrar test et → surum.json yeniden üret → GitHub
+
+### 05:40 bitti
+- [x] Yeniden derleme + uygulama içi güncelleme döngüsü baştan sona doğrulandı (65 sn, 26 kayıt korundu)
+- [x] GitHub v1.3.0 yayınlandı (latest): SesDefteri-Setup.exe, SesDefteri.zip, SesDefteri-Basit-Setup.exe (ece5906)
+- [ ] SesDefteri-NVIDIA-Setup.exe yüklenemedi: bu ağda büyük yüklemeler TLS hatasıyla kesiliyor (curl SEC_E_MESSAGE_ALTERED, gh bad record MAC). Başka ağdan: `bash tools/dev/upload.sh v1.3.0 dist/SesDefteri-NVIDIA-Setup.exe`, sonra make_release_json.py --nvidia ile surum.json yeniden üret
+- [ ] KULLANICI: site/ses-defteri (surum.json, index.html, logo.svg) → selimoguz.com.tr/ses-defteri/ (site/OKU.txt)
