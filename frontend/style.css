@@ -441,10 +441,13 @@ dialog .empty { padding:18px 6px; }
 .pcard .pinfo { gap:8px; flex-wrap:wrap; }
 .pcard .pinfo .ptitle { flex:0 1 240px; } .pcard .pinfo .pnote { flex:1 1 300px; }
 
-/* Assistant page (chat.js) */
-#assistant { max-width:860px; margin:0 auto; padding:16px 24px; display:flex; flex-direction:column; gap:12px; }
+/* Assistant page (chat.js): conversation on the left, saved conversations on the right */
+#assistant { max-width:none; margin:0; padding:0; height:100vh; display:flex; flex-direction:row; align-items:stretch; gap:0; }
+body:has(#assistant:not([hidden])) { padding-bottom:0; }
+#assistant .astmain { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; padding:16px 24px; }
 #assistant .asthead { display:flex; align-items:center; gap:10px; } #assistant h2 { margin:0; } #assistant .spacer { flex:1; }
-.astlog { display:flex; flex-direction:column; gap:10px; min-height:280px; max-height:calc(100vh - 330px); overflow:auto; padding:4px 2px; }
+#assistant .astchattoggle { display:none; }
+.astlog { flex:1; min-height:0; max-height:none; display:flex; flex-direction:column; gap:10px; overflow:auto; padding:4px 2px; }
 .astex { display:flex; flex-wrap:wrap; gap:8px; }
 .astmsg { max-width:82%; padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--card); }
 .astmsg p { margin:0; white-space:pre-line; } .astmsg p + p, .astmsg .srcs { margin-top:8px; }
@@ -458,7 +461,37 @@ dialog .empty { padding:18px 6px; }
 .astin { display:flex; gap:8px; align-items:flex-end; }
 .astin textarea { flex:1; resize:vertical; min-height:44px; font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
 #assistant .astnote { margin:0; font-size:14px; }
-@media (max-width:640px) { .astmsg { max-width:100%; } }
+
+/* assistant conversations (chat.js): the panel on the right */
+.astpanel { flex:none; width:260px; height:100%; display:flex; flex-direction:column; gap:10px; padding:12px;
+  background:var(--card); border-left:1px solid var(--line); overflow:hidden; }
+.astpanel .astnew { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; }
+.astpanel .astnew .ic { width:18px; height:18px; flex:none; vertical-align:0; }
+.astchats { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:2px; }
+.astnochats { margin:8px 4px; }
+.astchat { position:relative; display:flex; align-items:center; border-radius:10px; }
+.astchat.on { background:color-mix(in srgb, var(--accent) 14%, transparent); }
+.astchatbtn { flex:1; min-width:0; text-align:left; border:0; background:transparent; border-radius:10px;
+  padding:9px 30px 9px 12px; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.astchat.on .astchatbtn { color:var(--accent); font-weight:500; }
+.astchat:not(.on) .astchatbtn:hover:not(:disabled) { background:color-mix(in srgb, var(--fg) 6%, transparent); border-color:transparent; }
+.astmore { position:absolute; top:50%; right:4px; transform:translateY(-50%); border:0; background:transparent;
+  color:var(--muted); padding:4px; border-radius:8px; display:grid; place-items:center; }
+.astmore .ic { width:16px; height:16px; vertical-align:0; }
+.astmore:hover:not(:disabled) { color:var(--fg); background:color-mix(in srgb, var(--fg) 8%, transparent); border-color:transparent; }
+.astmenu { position:absolute; top:36px; right:4px; z-index:5; display:flex; flex-direction:column; min-width:160px; padding:4px;
+  background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.15); }
+.astmenu button { border:0; background:transparent; text-align:left; padding:7px 10px; border-radius:6px; }
+.astmenu button:hover:not(:disabled) { background:color-mix(in srgb, var(--fg) 7%, transparent); border-color:transparent; }
+.astrename { width:100%; min-width:0; padding:8px 10px; }
+@media (max-width:900px) {
+  #assistant .astchattoggle { display:inline-flex; align-items:center; gap:6px; }
+  #assistant .astchattoggle .ic { width:18px; height:18px; vertical-align:0; }
+  .astpanel { position:fixed; top:0; right:0; bottom:0; z-index:60; width:280px; height:auto; display:none;
+    box-shadow:-8px 0 30px -10px rgba(0,0,0,.35); }
+  .astpanel.open { display:flex; }
+}
+@media (max-width:640px) { .astmsg { max-width:100%; } #assistant .astmain { padding:12px 14px; } }
 
 /* glossary and person pop-ups (people.js) */
 .glossdlg { width:min(680px, 92vw); max-height:86vh; overflow:auto; }
