@@ -44,7 +44,13 @@ NOT_ADDRESS = {"Bugün", "Yarın", "Dün", "Yani", "Peki", "Şimdi", "Aslında",
                "How", "Who", "Where", "You", "Your", "We", "They", "Arkadaşlar", "Beyler", "Hanımlar", "Efendim",
                "Hocam", "Herkes", "Ekip", "Sevgili", "Değerli", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
                "Cumartesi", "Pazar", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos",
-               "Eylül", "Ekim", "Kasım", "Aralık", "Friends", "Guys", "Everyone", "Team"}
+               "Eylül", "Ekim", "Kasım", "Aralık", "Friends", "Guys", "Everyone", "Team",
+               # interjections and short answers that start a sentence like a name would ("İyi, güzel.")
+               "İyi", "Güzel", "Harika", "Süper", "Doğru", "Aynen", "Kesinlikle", "Elbette", "Valla", "Vallahi",
+               "Bak", "Bakın", "Bakalım", "Şey", "Hmm", "Hı", "Ha", "Ah", "Oh", "Of", "Eee", "Pardon", "Kusura",
+               "Merak", "Yok", "Var", "Belki", "Galiba", "Herhalde", "Gerçekten", "Zaten", "Hani", "İşte", "Neyse",
+               "Teşekkür", "Rica", "Hoşça", "Görüşürüz", "Tabi", "Anladım", "Tamamdır", "Oldu", "Olmaz", "Gel", "Gelin",
+               "Good", "Great", "Nice", "Right", "Sure", "Thanks", "Sorry", "Hey", "Oh", "Wow", "Hmm", "Look", "Listen"}
 
 
 def _is_default(label: str | None, spk: int) -> bool:
