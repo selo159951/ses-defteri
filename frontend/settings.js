@@ -82,7 +82,7 @@
     if (job) await save();
     audio.pause();
     showPage("settings");
-    if (!S.cfg) skeleton(root, "system");
+    if (!S.cfg) skeleton(root, "settings");
     try { await load(); } catch (e) { toast(t("set_failed", { e: msg(e) })); }
     draw();
     fadeIn(root);
@@ -235,6 +235,7 @@
     }));
     const body = el("div", { className: "sbody", role: "tabpanel" }, ...tabs.find(([id]) => id === S.tab)[3]());
     root.replaceChildren(el("h2", { textContent: t("set_title") }), el("div", { className: "slayout" }, nav, body));
+    body.scrollTop = 0; // a tab always opens at its top
     hydrateIcons(root);
   }
 })();

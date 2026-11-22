@@ -9,6 +9,7 @@
     ast_thinking: "Thinking… (the local model needs a few seconds)", ast_cancel: "Stop",
     ast_ex1: "Which decisions were made last week?", ast_ex2: "What tasks does Ahmet have?",
     ast_ex3: "What did we say about the budget this month?", ast_ex4: "Who made this app?",
+    ast_empty_title: "Ask about your recordings",
     ast_no_model: "The assistant uses the meeting-mode language model. Download it once on the System page; after that it works offline.",
     ast_open_system: "Open the System page", ast_busy: "A recording is being transcribed right now. Ask again when it is done.",
     ast_failed: "Something went wrong: {e}", ast_sources: "Sources", ast_range: "Searched: {r}",
@@ -22,6 +23,7 @@
     ast_thinking: "Düşünüyor… (yerel model birkaç saniye sürer)", ast_cancel: "Durdur",
     ast_ex1: "Geçen hafta hangi kararlar alındı?", ast_ex2: "Ahmet'in görevleri neler?",
     ast_ex3: "Bu ay bütçe hakkında ne konuştuk?", ast_ex4: "Bu uygulamayı kim yaptı?",
+    ast_empty_title: "Kayıtlarınız hakkında sorun",
     ast_no_model: "Asistan, toplantı modunun dil modelini kullanır. Sistem sayfasından bir kez indirin; sonra internetsiz çalışır.",
     ast_open_system: "Sistem sayfasını aç", ast_busy: "Şu an bir kayıt metne çevriliyor. Bitince tekrar sorun.",
     ast_failed: "Bir sorun oldu: {e}", ast_sources: "Kaynaklar", ast_range: "Aranan tarih: {r}",
@@ -37,8 +39,10 @@
     if (job) await save();
     audio.pause();
     showPage("assistant");
-    if (S.ready === null) { skeleton(root, "people"); try { S.ready = (await call("chat_info")).llm_ready; } catch { S.ready = false; } }
+    const first = S.ready === null;
+    if (first) { skeleton(root, "chat"); try { S.ready = (await call("chat_info")).llm_ready; } catch { S.ready = false; } }
     draw();
+    if (first) fadeIn(root);
     $("astIn")?.focus();
   }
   $("assistantBtn").onclick = open;
@@ -77,19 +81,22 @@
       kids.push(el("div", { className: "verdict warn" }, t("ast_no_model")), el("p", {}, go));
       root.replaceChildren(...kids); hydrateIcons(root); return;
     }
+    const input = el("textarea", { id: "astIn", rows: 2, placeholder: t("ast_ph"), maxLength: 500, disabled: S.busy });
     const log = el("div", { className: "astlog", id: "astLog" });
     if (!S.msgs.length) {
-      log.append(el("p", { className: "hint", textContent: t("ast_intro") }));
-      const ex = el("div", { className: "astex" });
-      for (const k of ["ast_ex1", "ast_ex2", "ast_ex3", "ast_ex4"]) ex.append(el("button", { type: "button", className: "small", textContent: t(k), onclick: () => ask(t(k)) }));
-      log.append(ex);
+      const chips = el("div", { className: "exchips" });
+      for (const k of ["ast_ex1", "ast_ex2", "ast_ex3"]) {
+        const b = el("button", { type: "button", className: "small", textContent: t(k) });
+        b.onclick = () => { input.value = t(k); input.focus(); };
+        chips.append(b);
+      }
+      log.append(emptyState("message-circle", t("ast_empty_title"), t("ast_intro"), chips));
     }
     S.msgs.forEach((m) => log.append(bubble(m)));
     if (S.busy) {
       const stop = el("button", { type: "button", className: "small", textContent: t("ast_cancel"), onclick: () => call("chat_cancel") });
       log.append(el("div", { className: "astmsg bot thinking" }, el("span", { className: "astdots" }), " " + t("ast_thinking"), " ", stop));
     }
-    const input = el("textarea", { id: "astIn", rows: 2, placeholder: t("ast_ph"), maxLength: 500, disabled: S.busy });
     input.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } };
     const send = el("button", { type: "button", className: "primary", textContent: t("ast_send"), disabled: S.busy, onclick: () => ask(input.value) });
     kids.push(log, el("div", { className: "astin" }, input, send), el("p", { className: "hint astnote", textContent: t("ast_note") }));

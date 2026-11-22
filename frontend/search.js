@@ -22,7 +22,7 @@
   window.semOffer = (parent) => {
     const b = el("button", { className: "small", style: "margin-left:8px" }, icText("sparkles", t("sem_offer")));
     b.onclick = () => { on = true; paint(); remember(); loadJobs(); };
-    parent.append(b);
+    (parent.querySelector(".empty") || parent).append(b);
   };
 
   const words = (q) => fold(q).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3).map((w) => w.slice(0, 5));

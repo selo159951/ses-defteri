@@ -143,6 +143,8 @@ const SAMPLE_ANALYSIS = {
     if (!job) { pane.replaceChildren(); return; }
     const id = job.id;
     jobId = id;
+    const fresh = !pane.firstChild; // first look at this tab: show the analysis page shape while it loads
+    if (fresh) skeleton(pane, "analysis");
     let st;
     if (!apiHas("get_analysis")) {
       // backend not present yet (this worktree): show the "none" state with no model
@@ -155,6 +157,7 @@ const SAMPLE_ANALYSIS = {
     last = st;
     if (st.state === "done" || st.state === "stale") showChapters(st.analysis?.chapters);
     render(st);
+    if (fresh) fadeIn(pane);
     if (st.state === "queued" || st.state === "running") pollT = setTimeout(() => { if (tab === "analysis" && jobId === id) load(); }, 1500);
   }
 

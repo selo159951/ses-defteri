@@ -8,6 +8,16 @@
   };
   const S = { list: [], textLang: null, adding: false, rec: null, error: "", gloss: null };
   const msg = (e) => (e && e.message) || String(e);
+  const pdlg = $("personDlg"), pbody = $("personBody");
+  pdlg.addEventListener("close", () => { S.adding = false; if (S.rec) cancelRec(); });
+  const openDlg = () => { if (!pdlg.open) pdlg.showModal(); };
+  const closeDlg = () => { if (pdlg.open) pdlg.close(); };
+  const errLine = () => S.error ? [el("p", { className: "perr", textContent: S.error })] : [];
+  function dlgHead(title, onclose) {
+    const x = el("button", { type: "button", className: "icon", title: t("close") }, ic("x"));
+    x.onclick = onclose;
+    return el("div", { className: "pdlghead" }, el("h3", { textContent: title }), el("span", { className: "spacer" }), x);
+  }
 
   async function refresh(render = true) {
     try { S.list = await call("list_people"); } catch (e) { S.error = msg(e); }
@@ -26,7 +36,7 @@
     await refresh();
     if (first) fadeIn(root);
   }
-  function close() { root.hidden = true; if (S.rec) cancelRec(); S.adding = false; }
+  function close() { root.hidden = true; if (S.rec) cancelRec(); S.adding = false; closeDlg(); }
   $("peopleBtn").onclick = open;
   $("homeBtn").addEventListener("click", close);
   window.addEventListener("pageopen", (e) => { if (e.detail !== "people" && !root.hidden) close(); });
@@ -91,7 +101,7 @@
         ...(glossBtn ? [glossBtn] : []), ...(confirmAll ? [confirmAll] : []), addPanel()),
       el("p", { className: "hint", textContent: t("people_hint") }),
       ...(S.error ? [el("p", { className: "perr", textContent: S.error })] : []),
-      ...(cards.length ? cards : [el("p", { className: "hint", textContent: t("no_people") })]));
+      ...(cards.length ? cards : [emptyState("users", t("no_people_title"), t("no_people"), { label: t("add_person"), onclick: openAdd })]));
   }
 
   function openGlossary() {
@@ -147,27 +157,44 @@
       el("p", { className: "hint", textContent: t("glossary_hint") }),
       terms, el("div", { className: "prow" }, saveBtn, saved),
       el("h4", { className: "gtitle", textContent: t("learned_fixes") }),
-      ...(fixes.length ? fixes : [el("p", { className: "hint", textContent: t("no_fixes") })]),
+      ...(fixes.length ? fixes : [emptyState("book-open", t("no_fixes_title"), t("no_fixes"))]),
       el("div", { className: "prow gadd" }, wrong, ic("arrow-right"), right, add),
     ];
   }
 
   function addPanel() {
-    if (!S.adding) {
-      const b = el("button", { textContent: t("add_person") });
-      b.onclick = () => { S.adding = true; draw(); };
-      return b;
-    }
+    const b = el("button", { textContent: t("add_person") });
+    b.onclick = openAdd;
+    return b;
+  }
+
+  /* The add form and the voice recording live in a dialog: the page below stays as it is. */
+  function openAdd() {
+    S.adding = true; S.error = "";
+    drawAdd();
+    openDlg();
+  }
+  function drawAdd() {
     const name = el("input", { placeholder: t("person_name_ph"), className: "pname" });
     const file = el("button", { textContent: t("from_file") });
     const mic = el("button", {}, icText("mic", t("from_mic")));
     const cancel = el("button", { className: "small", textContent: t("cancel_btn") });
-    const need = () => { const n = name.value.trim(); if (!n) { name.focus(); S.error = t("name_needed"); draw(); } return n; };
-    file.onclick = () => { const n = need(); if (n) run(() => call("add_person_sample_file", null, n)); };
+    const need = () => { const n = name.value.trim(); if (!n) { name.focus(); S.error = t("name_needed"); drawAdd(); } return n; };
+    file.onclick = () => { const n = need(); if (n) run(() => call("add_person_sample_file", null, n), true); };
     mic.onclick = () => { const n = need(); if (n) startRec(null, n); };
-    cancel.onclick = () => { S.adding = false; S.error = ""; draw(); };
+    cancel.onclick = () => { S.adding = false; S.error = ""; closeDlg(); };
+    pbody.replaceChildren(dlgHead(t("add_person_title"), cancel.onclick), ...errLine(),
+      el("div", { className: "paddbox" }, name, file, mic, cancel));
+    hydrateIcons(pbody);
     queueMicrotask(() => name.focus());
-    return el("div", { className: "paddbox" }, name, file, mic, cancel);
+  }
+  function drawDlgError(title) {
+    const closeBtn = el("button", { type: "button", textContent: t("close") });
+    closeBtn.onclick = () => { S.error = ""; closeDlg(); };
+    pbody.replaceChildren(dlgHead(title, () => { S.error = ""; closeDlg(); }), ...errLine(),
+      el("div", { className: "prow" }, closeBtn));
+    hydrateIcons(pbody);
+    openDlg();
   }
 
   async function confirmOne(id) {
@@ -183,19 +210,23 @@
     refresh();
   }
 
-  async function run(fn) {
+  async function run(fn, fromDlg = false) {
     S.error = ""; toast(t("working"));
     try {
       const r = await fn();
       if (r && r.cancelled) { $("toast").hidden = true; return; }
       S.adding = false; if (r && r.name) toast(t("person_saved", { n: r.name }));
-    } catch (e) { S.error = msg(e); $("toast").hidden = true; }
+      if (fromDlg) closeDlg();
+    } catch (e) {
+      S.error = msg(e); $("toast").hidden = true;
+      if (fromDlg) { drawAdd(); return; }
+    }
     refresh();
   }
 
   /* ---------- microphone ---------- */
   async function startRec(pid, name) {
-    S.error = ""; S.adding = false;
+    S.error = ""; S.adding = pid === null;
     const lang = S.textLang || (LANG === "en" ? "en" : "tr");
     const text = el("p", { className: "rtext", textContent: TEXTS[lang] });
     const sel = el("select", {}, new Option("Türkçe", "tr"), new Option("English", "en"));
@@ -210,13 +241,17 @@
     const r = S.rec = { timer: null, busy: false };
     stop.onclick = () => finish();
     cancel.onclick = () => cancelRec();
-    root.replaceChildren(
-      el("div", { className: "toolbar" }, el("h2", { textContent: t("rec_title") }), el("span", { className: "spacer" }),
-        el("label", { className: "pmeta" }, t("rec_text_lang") + " ", sel)),
+    pbody.replaceChildren(
+      dlgHead(t("rec_title"), () => cancelRec()),
+      ...errLine(),
+      el("label", { className: "pmeta" }, t("rec_text_lang") + " ", sel),
       text, meter, prog, label, state,
       el("p", { className: "hint", textContent: t("rec_tip", { n: MIN_SPEECH }) }),
       el("div", { className: "prow" }, stop, cancel));
-    try { await call("start_recording"); } catch (e) { S.rec = null; S.error = t("rec_mic_error") + ": " + msg(e); return draw(); }
+    hydrateIcons(pbody);
+    openDlg();
+    try { await call("start_recording"); }
+    catch (e) { S.rec = null; S.error = t("rec_mic_error") + ": " + msg(e); return drawDlgError(t("rec_title")); }
     r.stop = stop; r.finish = finish;
     r.timer = setInterval(async () => {
       if (r.busy) return;
@@ -233,17 +268,24 @@
     async function finish() {
       if (r.busy) return;
       r.busy = true; clearInterval(r.timer); state.textContent = t("rec_saving"); stop.disabled = cancel.disabled = true;
+      let saved = false;
       try {
         const p = await call("stop_recording", pid, name);
         toast(t("person_saved", { n: p.name }));
+        saved = true;
       } catch (e) { S.error = msg(e); }
-      S.rec = null; refresh();
+      S.rec = null; S.adding = false;
+      if (saved) { closeDlg(); refresh(); }
+      else drawDlgError(t("rec_title"));
     }
   }
   async function cancelRec() {
-    const r = S.rec; if (!r) return;
+    const r = S.rec;
+    S.adding = false;
+    if (!r) { closeDlg(); return; }
     clearInterval(r.timer); S.rec = null;
     try { await call("cancel_recording"); } catch {}
+    closeDlg();
     if (!root.hidden) refresh();
   }
 
