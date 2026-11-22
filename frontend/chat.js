@@ -221,17 +221,22 @@
   }
 
   /* A background call whose result is kept in the message; runs once, not on every redraw. */
+  const inflight = new WeakSet(); // a "pending" saved with the chat (app closed meanwhile) is asked again
   function load(m, key, name, ...args) {
-    if (m[key]) return m[key];
-    m[key] = { pending: true };
+    const cur = m[key];
+    if (cur && (!cur.pending || inflight.has(cur))) return cur;
+    const d = m[key] = { pending: true };
+    inflight.add(d);
     call(name, ...args).then((r) => {
-      Object.assign(m[key], (r && !r.error) ? r : { error: (r && r.error) || "failed" });
-      if (!root.hidden) draw();
+      Object.assign(d, (r && !r.error) ? r : { error: (r && r.error) || "failed" });
     }).catch(() => {
-      Object.assign(m[key], { error: "failed" });
+      Object.assign(d, { error: "failed" });
+    }).finally(() => {
+      delete d.pending; // without this the card says "searching…" for ever
+      inflight.delete(d);
       if (!root.hidden) draw();
     });
-    return m[key];
+    return d;
   }
 
   function findRecordings(m, a) {
