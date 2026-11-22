@@ -128,7 +128,7 @@
           <select id="expVersion"><option value="edited" data-i18n="edited"></option><option value="original" data-i18n="original"></option><option value="both" data-i18n="both"></option><option value="analysis" data-i18n="export_analysis"></option></select></label>
         <label><span data-i18n="format"></span>
           <select id="expFmt"><option value="docx">Word (.docx)</option><option value="txt">TXT</option><option value="md">Markdown</option><option value="srt" data-i18n="srt"></option><option value="json">JSON</option></select></label>
-        <div id="expWho"><div class="menulabel" data-i18n="only_who"></div><div id="expWhoList"></div>
+        <div id="expWho"><div class="menulabel"><span data-i18n="only_who"></span> <span id="expWhoCount"></span></div><div id="expWhoList"></div>
           <div class="hint" data-i18n="only_who_hint"></div></div>
         <div id="expAnalysisHint" class="hint" data-i18n="export_analysis_hint" hidden></div>
         <button id="expGo" data-i18n="save_as"></button>
@@ -141,7 +141,9 @@
   </div>
   <div id="paneText">
   <details id="chapters" class="chapters" hidden><summary id="chaptersSum"></summary><div id="chaptersList"></div></details>
+  <div id="nameBox" class="namebox" hidden></div>
   <div id="speakers"></div>
+  <div id="peopleAsk" class="peopleask" hidden></div>
   <div id="filters">
     <div class="searchbox">
       <input id="q" type="search" data-i18n-ph="q_ph">

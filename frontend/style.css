@@ -93,6 +93,19 @@ button.icon { min-width:34px; padding:5px 8px; text-align:center; }
 .spk.s0 { background:var(--s0); } .spk.s1 { background:var(--s1); } .spk.s2 { background:var(--s2); }
 .spk.s3 { background:var(--s3); } .spk.s4 { background:var(--s4); } .spk.s5 { background:var(--s5); }
 
+/* naming unnamed speakers, then offering their voice to People */
+.namebox { margin:6px 0 10px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
+.nameboxhead { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.nameboxtitle { font-weight:600; font-size:14px; }
+.nameboxhead .linkbtn { margin-left:auto; background:none; border:none; color:var(--accent); cursor:pointer; padding:0; font-size:14px; }
+.nameboxrows { display:flex; flex-direction:column; gap:6px; }
+.nameboxrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; }
+.nameboxspk { font-weight:600; padding:1px 8px; border-radius:6px; }
+.nameboxrow input { width:150px; }
+.peopleask { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:-2px 0 10px; font-size:14px; }
+.peopleasktext { color:var(--muted); }
+#expWhoCount { color:var(--fg); }
+
 /* search & filters */
 #filters { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding:6px 8px; background:var(--card); border:1px solid var(--line); border-radius:10px; margin-bottom:8px; position:sticky; top:0; z-index:4; }
 .searchbox { display:flex; gap:4px; align-items:center; }

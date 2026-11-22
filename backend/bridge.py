@@ -788,7 +788,7 @@ class Api(SystemApi, LlmApi, SearchApi):
         data = _job(job_id)
         stem = _safe_name(Path(data["filename"]).stem)
         win = self._window()
-        speakers = sorted({int(x) for x in speakers or []})
+        speakers = sorted({int(x) for x in speakers or []})  # an empty list means everybody
         if speakers and version != "analysis":  # only these people's lines: their names go into the file name
             stem += " - " + _safe_name(", ".join(export.speaker_names(data, speakers, lang)))
 

@@ -331,6 +331,7 @@ const SAMPLE_ANALYSIS = {
           try {
             await save();
             applyJob(await call("accept_name_suggestion", job.id, s.speaker, s.name)); // returns the updated job
+            window.afterSpeakerNamed?.(s.speaker);
           } catch (e) { toast(String(e?.message || e)); return; }
           load();
         };

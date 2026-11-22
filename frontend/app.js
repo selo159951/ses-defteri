@@ -323,6 +323,7 @@ async function openJob(id) {
   $("home").hidden = true; $("view").hidden = false; $("player").hidden = false; $("homeBtn").hidden = false;
   for (const p of PAGES) $(p).hidden = true; // e.g. a search result opened while a page was showing
   $("title").textContent = ""; $("speakers").replaceChildren(); skeleton($("segs"), "lines");
+  $("nameBox").hidden = true; $("nameBox").replaceChildren(); $("peopleAsk").hidden = true; $("peopleAsk").replaceChildren();
   let j;
   try { j = await call("get_job", id); }
   catch (e) { $("segs").replaceChildren(); throw e; }
@@ -340,7 +341,7 @@ function applyJob(j) {
   if (j && j.learned === undefined && job && job.id === j.id) j.learned = job.learned;
   job = j; dirty = {}; segSpk = {}; spkNames = { ...j.speakers };
   for (const s of job.segments) spkNames[s.speaker] ??= `Speaker ${s.speaker + 1}`;
-  renderSpeakers(); renderSegs(); updateExportOptions();
+  renderSpeakers(); renderSegs(); updateExportOptions(); renderNameBox(); hidePeopleAsk();
 }
 
 const spkIds = () => Object.keys(spkNames).map(Number).sort((a, b) => a - b);
@@ -400,7 +401,8 @@ function renderSpeakers() {
     inp.onchange = async () => {
       await checkpoint();
       spkNames[i] = inp.value.trim() || `Speaker ${i + 1}`;
-      commit(t("renamed_to", { s: spkLabel(i) }));
+      await commit(t("renamed_to", { s: spkLabel(i) }));
+      maybeAskPerson(i);
     };
     // "⋯" menu: move all lines to another speaker / remove an unused speaker
     const menu = el("div", { className: "popmenu" });
@@ -474,6 +476,91 @@ async function detectNames() {
   if (!found.length) { undoStack.pop(); updateUndo(); }
   applyJob(r.job);
   toast(found.length ? t("names_found", { s: found.join(", ") }) : t("no_names"), !!found.length);
+}
+
+/* ================= naming the unnamed speakers ================= */
+/* A speaker still called "Speaker N" / "Konuşmacı N" is unnamed (see backend/names.py _is_default). */
+const isDefaultName = (name, i) => !name || name === `Speaker ${i + 1}` || name === `Konuşmacı ${i + 1}`;
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* not remembered */ } };
+const namesLaterKey = (id) => `sd_names_later:${id}`;
+
+function renderNameBox() {
+  const box = $("nameBox");
+  if (!job) { box.hidden = true; box.replaceChildren(); return; }
+  const unnamed = spkIds().filter((i) => isDefaultName(spkNames[i], i) && job.segments.some((s) => s.speaker === i));
+  if (!unnamed.length || lsGet(namesLaterKey(job.id))) { box.hidden = true; box.replaceChildren(); return; }
+  box.hidden = false;
+  const later = el("button", { className: "linkbtn", textContent: t("later") });
+  later.onclick = () => { lsSet(namesLaterKey(job.id), "1"); renderNameBox(); };
+  box.replaceChildren(el("div", { className: "nameboxhead" },
+    el("span", { className: "nameboxtitle", textContent: t("name_box_title") }), later));
+  const rows = el("div", { className: "nameboxrows" });
+  for (const i of unnamed) {
+    const mine = job.segments.filter((s) => s.speaker === i);
+    const longest = mine.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
+    const play = el("button", { className: "icon playbtn", textContent: "▶", title: t("play_spk") });
+    play.onclick = () => playRange(longest.start, longest.end);
+    const inp = el("input", { placeholder: t("name_ph"), title: t("name_ph") });
+    const go = el("button", { className: "small", textContent: t("save_btn") });
+    const saveName = async () => {
+      const name = inp.value.trim();
+      if (!name) { inp.focus(); return; }
+      await checkpoint();
+      spkNames[i] = name;
+      await commit(t("renamed_to", { s: spkLabel(i) }));
+      maybeAskPerson(i);
+    };
+    go.onclick = saveName;
+    inp.onkeydown = (e) => { if (e.key === "Enter") saveName(); };
+    rows.append(el("div", { className: "nameboxrow" }, play,
+      el("span", { className: "nameboxspk " + spkClass(i), textContent: spkLabel(i) }),
+      el("span", { className: "stats", textContent: plural(mine.length, "line_1", "lines_n") }), inp, go));
+  }
+  box.append(rows);
+}
+
+/* ================= add a named speaker to People ================= */
+const askedKey = (id, i) => `sd_people_ask:${id}:${i}`;
+function hidePeopleAsk() { const b = $("peopleAsk"); b.hidden = true; b.replaceChildren(); }
+
+/* After a speaker gets a name: offer to save its voice, unless the voice is already known for it. */
+async function maybeAskPerson(i) {
+  if (!job) return;
+  const name = (spkNames[i] || "").trim();
+  if (!name || isDefaultName(name, i)) return;
+  if (lsGet(askedKey(job.id, i))) return;
+  if (job.voice_matches?.[i]?.name === name) return; // this voice is already saved for this speaker
+  let people = [];
+  try { people = await call("list_people"); } catch (e) { people = []; }
+  const same = people.find((p) => (p.name || "").toLocaleLowerCase() === name.toLocaleLowerCase());
+  const bar = $("peopleAsk");
+  const add = el("button", { className: "small primary", textContent: t("people_add") });
+  add.onclick = () => saveSpeakerAsPerson(i, null, name);
+  const no = el("button", { className: "small", textContent: t("people_no") });
+  no.onclick = () => { lsSet(askedKey(job.id, i), "1"); hidePeopleAsk(); };
+  const kids = [el("span", { className: "peopleasktext", textContent: t("people_ask", { n: name }) }), add];
+  if (same) {
+    const ex = el("button", { className: "small", textContent: t("people_add_existing", { n: same.name }) });
+    ex.onclick = () => saveSpeakerAsPerson(i, same.id, null);
+    kids.push(ex);
+  }
+  kids.push(no);
+  bar.hidden = false;
+  bar.replaceChildren(...kids);
+}
+window.afterSpeakerNamed = maybeAskPerson; // analysis.js / people.js: after a name suggestion is accepted
+
+async function saveSpeakerAsPerson(i, personId, name) {
+  toast(t("working"));
+  try {
+    const p = await call("save_speaker_as_person", job.id, i, personId, name);
+    lsSet(askedKey(job.id, i), "1");
+    hidePeopleAsk();
+    toast(t("saved_voice", { n: p.name }) + (p.weak ? " - " + t("weak_voice") : ""));
+  } catch (e) {
+    toast(t("save_failed") + ": " + (e?.message || e)); // e.g. not enough speech from this speaker
+  }
 }
 
 /* ================= lines ================= */
@@ -804,11 +891,20 @@ function renderExportWho() {
     const cb = el("input", { type: "checkbox", value: i, checked: keep.has(i) });
     box.append(el("label", { className: "chk " + spkClass(i) }, cb, el("span", { textContent: spkLabel(i) })));
   }
+  updateWhoCount();
 }
+/* Live count next to "Only one person's words": nobody or everybody ticked = everyone. */
+function updateWhoCount() {
+  const boxes = [...$("expWhoList").querySelectorAll("input")];
+  const n = boxes.filter((c) => c.checked).length;
+  $("expWhoCount").textContent = !n || n === boxes.length ? t("who_all") : n === 1 ? t("who_one") : t("who_n", { n });
+}
+$("expWhoList").addEventListener("change", updateWhoCount);
 const selectedWho = () => [...$("expWhoList").querySelectorAll("input:checked")].map((c) => +c.value);
 function exportOnly(i) {
   renderExportWho();
   for (const c of $("expWhoList").querySelectorAll("input")) c.checked = +c.value === i;
+  updateWhoCount();
   $("expVersion").value = "edited"; updateExportOptions();
   setTimeout(() => ($("expMenu").open = true), 0); // after the page-wide "click outside closes menus" handler
   toast(t("only_export_set", { s: spkLabel(i) }));
@@ -822,7 +918,8 @@ function reportSaved(r) {
 $("expGo").onclick = async () => {
   await save();
   const v = $("expVersion").value, f = $("expFmt").value;
-  const who = v === "analysis" ? [] : selectedWho();
+  const picked = selectedWho(), total = $("expWhoList").querySelectorAll("input").length;
+  const who = v === "analysis" || picked.length === total ? [] : picked; // nobody or everybody = everyone
   $("expGo").closest("details").open = false;
   reportSaved(await call("save_export", job.id, v, f, LANG, who)); // native "Save as" dialog
 };
@@ -876,7 +973,7 @@ function setLang(l, persist = true) {
   $("langSel").value = LANG;
   applyI18n(); renderCredits(); renderWatch(); renderDenoise();
   if (gpuState) showGpu(gpuState);
-  if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); } else loadJobs();
+  if (job && !$("view").hidden) { renderSpeakers(); renderSegs(); updateExportOptions(); renderNameBox(); } else loadJobs();
   if (persist) call("set_settings", { ui_lang: LANG }).catch(() => {});
   window.dispatchEvent(new Event("langchange"));
 }

@@ -245,6 +245,37 @@ def test_desktop_save_export(tmp_path, monkeypatch):
     assert api.save_export(jid, "edited", "txt") == {"cancelled": True}
 
 
+def test_save_export_empty_speaker_list_means_everyone(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    from backend import bridge
+
+    jid = _job()
+    d = store.read_transcript(jid)
+    d["speakers"]["1"] = "Mehmet"
+    d["segments"].append({"id": 99, "start": 4.0, "end": 5.0, "speaker": 1,
+                          "text_edited": "second voice", "text_original": "second voice"})
+    store.write_transcript(jid, d)
+    paths = iter([tmp_path / "all.txt", tmp_path / "one.txt"])
+
+    class FakeWin:
+        def create_file_dialog(self, kind, **kw):
+            return str(next(paths))
+
+    fake = types.SimpleNamespace(FileDialog=types.SimpleNamespace(SAVE="save", FOLDER="folder", OPEN="open"))
+    monkeypatch.setitem(sys.modules, "webview", fake)
+    api = bridge.Api(window_getter=FakeWin)
+    # the UI sends [] when nobody (or everybody) is ticked: no filter, everyone's lines
+    r = api.save_export(jid, "edited", "txt", "en", [])
+    text = Path(r["paths"][0]).read_text("utf-8")
+    assert "hello" in text and "second voice" in text
+    # a ticked speaker keeps only that speaker's lines
+    r = api.save_export(jid, "edited", "txt", "en", ["1"])
+    text = Path(r["paths"][0]).read_text("utf-8")
+    assert "second voice" in text and "hello" not in text
+
+
 def test_export_language_for_default_names():
     jid = _job()  # speaker 0 still has the default label "Speaker 1"
     d = store.read_transcript(jid)

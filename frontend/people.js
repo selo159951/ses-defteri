@@ -330,7 +330,7 @@
         const b = el("button", { className: "small vsuggest", title: t("accept_title") }, t("maybe_person", { n: s.name }) + " ", ic("check"));
         b.onclick = async () => {
           await save();
-          try { applyJob(await call("accept_suggestion", job.id, i, s.person_id)); } catch (e) { toast(msg(e)); }
+          try { applyJob(await call("accept_suggestion", job.id, i, s.person_id)); window.afterSpeakerNamed?.(i); } catch (e) { toast(msg(e)); }
         };
         card.append(b);
       }
