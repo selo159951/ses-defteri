@@ -290,6 +290,20 @@ def clean_words(words: list[str], people: list[str]) -> list[str]:
     return list(dict.fromkeys(out))[:6]
 
 
+def in_recordings(words: list[str]) -> bool:
+    """True when one line of the recordings has at least two of the words (or the only one): a single common word
+    ("liste", "hava") is not enough to call a general question a question about the meetings."""
+    words = [w for w in words if w.strip()][:6]
+    if not words:
+        return False
+    need = min(2, len(words))
+    hits: dict[int, int] = {}
+    for w in words:
+        for r in chatdb.search([w], limit=200):
+            hits[r["rowid"]] = hits.get(r["rowid"], 0) + 1
+    return any(n >= need for n in hits.values())
+
+
 def tidy(text: str) -> str:
     """The page shows plain text: no **bold** marks; the app name spelled right."""
     text = re.sub(r"\*\*(.+?)\*\*|__(.+?)__", lambda m: m[1] or m[2], text)
@@ -409,7 +423,12 @@ def ask(question: str, history: list[dict] | None = None, lang: str = "tr", gene
               "anahtar": clean_words([str(x) for x in intent.get("anahtar") or []], kisiler)}
 
     if intent["niyet"] == "kapsam_disi":
-        return {"answer": T["off_topic"], "sources": [], "found": False, "intent": intent, "range": ""}
+        # a small model sometimes calls a real meeting question off topic ("Reklam bütçesini kim onaylayacak?"):
+        # when the words of the question are said together in a recording, it is about the recordings after all
+        words = intent["anahtar"] or clean_words(question.split(), kisiler)
+        if not in_recordings(words):
+            return {"answer": T["off_topic"], "sources": [], "found": False, "intent": intent, "range": ""}
+        intent = {**intent, "niyet": "kayit", "anahtar": words}
     if intent["niyet"] == "uygulama":
         sys2 = (f"Sen Ses Defteri'nin asistanısın. Yalnızca şu bilgilere dayanarak {'Türkçe' if lang == 'tr' else 'English'}"
                 f" ve kısa cevap ver, bilmediğin şeyi uydurma:\n{APP_FACTS[lang]}")

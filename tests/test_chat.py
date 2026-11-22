@@ -292,3 +292,16 @@ def test_old_dates_are_not_carried_to_an_unrelated_question(data):
 
 def test_month_names_are_not_search_words():
     assert chat.clean_words(["kasım", "bütçe"], []) == ["bütçe"]
+
+
+def test_meeting_question_called_off_topic_is_still_searched(data):
+    llm = FakeLLM({"niyet": "kapsam_disi", "tur": "genel", "kisiler": [], "anahtar": []},
+                  {"cevap": "Ödeme ekranı yavaş.", "kaynaklar": [1], "bulundu": True})
+    r = chat.ask("Ödeme ekranı neden yavaş?", generate=llm, people=[], now=NOW)
+    assert r["intent"]["niyet"] == "kayit" and r["sources"] and len(llm.calls) == 2
+
+
+def test_one_common_word_does_not_make_a_general_question_a_meeting_question(data):
+    llm = FakeLLM({"niyet": "kapsam_disi", "tur": "genel", "kisiler": [], "anahtar": []})
+    r = chat.ask("Python ekranı nasıl temizlenir?", generate=llm, people=[], now=NOW)
+    assert r["answer"].startswith("Bu konuda yardımcı olamıyorum")
