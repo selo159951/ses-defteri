@@ -18,6 +18,19 @@
     ast_new_chat: "New chat", ast_chats: "Chats", ast_nochats: "No conversations yet",
     ast_rename: "Rename", ast_delete: "Delete", ast_delete_confirm: "Delete this conversation?",
     ast_more: "More actions",
+    ast_act_searching: "Looking for a speaker named {name} in your recordings…",
+    ast_act_searching_rec: "Looking through your recordings…",
+    ast_act_failed: "Something went wrong.",
+    ast_act_speaks: "{name} speaks in {n} recording(s).",
+    ast_act_groups: "The voices split into {g} groups.",
+    ast_act_one_group: "They all seem to be the same person.",
+    ast_act_none: "No speaker named {name} in your recordings. First name a speaker {name} in a recording.",
+    ast_act_new_person: "Add as a new person", ast_act_add_to: "Add to {name}",
+    ast_act_added: "✓ Added", ast_act_toast: "{name} was added to people.", ast_act_listen: "Listen",
+    ast_act_no_rec: "No recording matches those words.",
+    ast_act_name_btn: "Speaker {n} → {name} ({title})",
+    ast_act_named: "✓ Speaker {n} is now {name}", ast_act_named_toast: "The speaker was renamed to {name}.",
+    ast_act_which_spk: 'Which speaker do you mean? For example: "In the last recording, Speaker 2 is Ahmet".',
   });
   Object.assign(I18N.tr, {
     assistant: "Asistan", ast_title: "Toplantılarınıza soru sorun",
@@ -35,6 +48,19 @@
     ast_new_chat: "Yeni sohbet", ast_chats: "Sohbetler", ast_nochats: "Henüz sohbet yok",
     ast_rename: "Yeniden adlandır", ast_delete: "Sil", ast_delete_confirm: "Bu sohbet silinsin mi?",
     ast_more: "Diğer işlemler",
+    ast_act_searching: "Kayıtlarda {name} adlı konuşmacıyı arıyorum…",
+    ast_act_searching_rec: "Kayıtlara bakıyorum…",
+    ast_act_failed: "Bir sorun oldu.",
+    ast_act_speaks: "{n} kayıtta {name} konuşuyor.",
+    ast_act_groups: "Sesler {g} gruba ayrıldı.",
+    ast_act_one_group: "Hepsi aynı kişi gibi görünüyor.",
+    ast_act_none: "Kayıtlarda adı {name} olan konuşmacı yok. Önce bir kayıtta konuşmacıya {name} adını verin.",
+    ast_act_new_person: "Yeni kişi olarak ekle", ast_act_add_to: "{name} kişisine ekle",
+    ast_act_added: "✓ Eklendi", ast_act_toast: "{name} kişilere eklendi.", ast_act_listen: "Dinle",
+    ast_act_no_rec: "Bu kelimelere uyan kayıt yok.",
+    ast_act_name_btn: "Konuşmacı {n} → {name} (kayıt: {title})",
+    ast_act_named: "✓ Konuşmacı {n} artık {name}", ast_act_named_toast: "Konuşmacının adı {name} oldu.",
+    ast_act_which_spk: 'Hangi konuşmacıyı kastettiğinizi anlayamadım. Örneğin: "son kayıttaki Konuşmacı 2 Ahmet".',
   });
 
   const root = $("assistant");
@@ -176,8 +202,136 @@
     const kids = [el("p", { textContent: m.text })];
     if (m.sources?.length) kids.push(el("div", { className: "srcs" }, el("span", { className: "hint", textContent: t("ast_sources") + ":" }), ...m.sources.map(sourceChip)));
     if (m.range) kids.push(el("p", { className: "hint", textContent: t("ast_range", { r: m.range }) }));
-    if (m.action) kids.push(m.action);
+    if (m.action) kids.push(actionCard(m));
     return el("div", { className: "astmsg bot" + (m.error ? " err" : "") }, ...kids);
+  }
+
+  /* ---------------- action cards (a proposed action; nothing happens without a click) ---------------- */
+
+  /* The state lives in the message itself (m.actionData = what was found, m.actionState = what the user did),
+     so a reloaded conversation shows "✓ Eklendi" instead of live buttons. */
+  function actionCard(m) {
+    const card = el("div", { className: "astaction" });
+    const a = m.action || {};
+    if (m.actionState) card.append(el("p", { className: "astdone", textContent: m.actionState.label || t("ast_act_added") }));
+    else if (a.eylem === "kisi_ekle") cardAddPerson(card, m, a);
+    else if (a.eylem === "kayit_ac") cardOpenRecording(card, m, a);
+    else if (a.eylem === "konusmaci_adi") cardNameSpeaker(card, m, a);
+    return card;
+  }
+
+  /* A background call whose result is kept in the message; runs once, not on every redraw. */
+  function load(m, key, name, ...args) {
+    if (m[key]) return m[key];
+    m[key] = { pending: true };
+    call(name, ...args).then((r) => {
+      Object.assign(m[key], (r && !r.error) ? r : { error: (r && r.error) || "failed" });
+      if (!root.hidden) draw();
+    }).catch(() => {
+      Object.assign(m[key], { error: "failed" });
+      if (!root.hidden) draw();
+    });
+    return m[key];
+  }
+
+  function findRecordings(m, a) {
+    return load(m, "actionData", "action_find_recording", a.kayit || "");
+  }
+
+  function recButtons(card, m, matches, onclick) {
+    for (const j of matches || []) {
+      const date = new Date((j.created || 0) * 1000).toLocaleDateString(LANG === "tr" ? "tr-TR" : "en-GB",
+        { day: "numeric", month: "short" });
+      card.append(el("button", { type: "button", className: "astrecbtn", disabled: m.actionBusy,
+        textContent: (j.title || j.id) + " · " + date, onclick: () => onclick(j) }));
+    }
+  }
+
+  function listenAt(it) {
+    openJob(it.job_id).then(() => { audio.currentTime = it.sample_start || 0; audio.play(); });
+  }
+
+  function cardAddPerson(card, m, a) {
+    const d = load(m, "actionData", "action_find_speaker", a.ad || "");
+    if (d.pending) { card.append(el("p", { className: "hint", textContent: t("ast_act_searching", { name: a.ad || "" }) })); return; }
+    if (d.error) { card.append(el("p", { className: "hint", textContent: t("ast_act_failed") })); return; }
+    const groups = d.groups || [];
+    const name = d.name || a.ad || "";
+    if (!groups.length) { card.append(el("p", { textContent: t("ast_act_none", { name }) })); return; }
+    const n = groups.reduce((s, g) => s + (g.items || []).length, 0);
+    card.append(el("p", { textContent: t("ast_act_speaks", { n, name }) + " " +
+      (groups.length === 1 ? t("ast_act_one_group") : t("ast_act_groups", { g: groups.length })) }));
+    groups.forEach((g, gi) => {
+      const list = el("ul");
+      for (const it of g.items || []) {
+        const play = el("button", { type: "button", className: "astplay", title: t("ast_act_listen") });
+        play.dataset.icon = "play";
+        play.onclick = (e) => { e.stopPropagation(); listenAt(it); };
+        list.append(el("li", {}, (it.title || it.job_id) + " ", play));
+      }
+      const btns = el("div", { className: "astgrpbtns" },
+        el("button", { type: "button", className: "small", textContent: t("ast_act_new_person"), disabled: m.actionBusy,
+          onclick: () => addGroup(m, gi, null) }));
+      if (g.person) btns.append(el("button", { type: "button", className: "small", disabled: m.actionBusy,
+        textContent: t("ast_act_add_to", { name: g.person.name }), onclick: () => addGroup(m, gi, g.person.id) }));
+      card.append(el("div", { className: "astgrp" }, list, btns));
+    });
+  }
+
+  async function addGroup(m, gi, personId) {
+    const d = m.actionData, g = (d.groups || [])[gi];
+    if (!g || m.actionBusy) return;
+    m.actionBusy = true; draw();
+    let r;
+    try { r = await call("action_add_group", d.name || m.action.ad, g.items, personId); }
+    catch (e) { r = { error: "failed" }; }
+    m.actionBusy = false;
+    if (r && r.id && !r.error) {
+      m.actionState = { label: t("ast_act_added") + " · " + r.name };
+      toast(t("ast_act_toast", { name: r.name }));
+      queueSave("", "");
+    } else toast(t("ast_act_failed"));
+    draw();
+  }
+
+  function cardOpenRecording(card, m, a) {
+    const d = findRecordings(m, a);
+    if (d.pending) { card.append(el("p", { className: "hint", textContent: t("ast_act_searching_rec") })); return; }
+    if (d.error) { card.append(el("p", { className: "hint", textContent: t("ast_act_failed") })); return; }
+    const matches = d.matches || [];
+    if (!matches.length) { card.append(el("p", { textContent: t("ast_act_no_rec") })); return; }
+    recButtons(card, m, matches, (j) => {
+      m.actionState = { label: "✓ " + (j.title || j.id) };
+      openJob(j.id);
+      draw();
+    });
+  }
+
+  function cardNameSpeaker(card, m, a) {
+    const spk = a.konusmaci || 0;
+    if (spk < 1) { card.append(el("p", { className: "hint", textContent: t("ast_act_which_spk") })); return; }
+    const d = findRecordings(m, a);
+    if (d.pending) { card.append(el("p", { className: "hint", textContent: t("ast_act_searching_rec") })); return; }
+    if (d.error) { card.append(el("p", { className: "hint", textContent: t("ast_act_failed") })); return; }
+    const j = (d.matches || [])[0];
+    if (!j) { card.append(el("p", { textContent: t("ast_act_no_rec") })); return; }
+    const b = el("button", { type: "button", className: "small astconfirm", disabled: m.actionBusy,
+      textContent: t("ast_act_name_btn", { n: spk, name: a.ad || "", title: j.title || j.id }) });
+    b.onclick = async () => {
+      if (m.actionBusy) return;
+      m.actionBusy = true; draw();
+      let r;
+      try { r = await call("action_name_speaker", j.id, spk - 1, a.ad || ""); }
+      catch (e) { r = { error: "failed" }; }
+      m.actionBusy = false;
+      if (r && !r.error) {
+        m.actionState = { label: t("ast_act_named", { n: spk, name: a.ad || "" }) };
+        toast(t("ast_act_named_toast", { name: a.ad || "" }));
+        queueSave("", "");
+      } else toast(t("ast_act_failed"));
+      draw();
+    };
+    card.append(b);
   }
 
   function draw() {
@@ -272,7 +426,7 @@
     else if (r.error === "busy") S.msgs.push({ role: "bot", text: t("ast_busy"), error: true });
     else if (r.error) S.msgs.push({ role: "bot", text: t("ast_failed", { e: r.detail || r.error }), error: true });
     else {
-      S.msgs.push({ role: "bot", text: r.answer, sources: r.sources, range: r.range });
+      S.msgs.push({ role: "bot", text: r.answer, sources: r.sources, range: r.range, action: r.action || null });
       S.history.push({ q, range: r.range, range_ts: r.range_ts });
       S.history = S.history.slice(-3);
       answered = true;
