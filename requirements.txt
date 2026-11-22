@@ -8,4 +8,7 @@ sounddevice
 soundcard
 python-docx
 fpdf2
+pystray
+Pillow
+pycaw
 pytest

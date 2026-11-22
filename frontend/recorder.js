@@ -21,6 +21,9 @@
     rec_dev_lost: "{d} stopped: {e}",
     rec_leftover: "An unfinished recording was found: {t} ({d}).",
     rec_recover: "Transcribe it", rec_discard: "Delete",
+    rec_disk_full: "Recording could not start: only {free} is free. Free some space and try again.",
+    meet_detected: "A meeting was detected ({app}). Shall I record it?",
+    meet_record: "Record", meet_not_now: "Not this time",
   });
   Object.assign(I18N.tr, {
     rec_start: "Toplantıyı kaydet", rec_start_title: "Bilgisayardan gelen sesi (Teams, Meet, Zoom…) ve mikrofonunuzu birlikte kaydeder",
@@ -40,6 +43,9 @@
     rec_dev_lost: "{d} durdu: {e}",
     rec_leftover: "Yarım kalmış bir kayıt bulundu: {t} ({d}).",
     rec_recover: "Metne çevir", rec_discard: "Sil",
+    rec_disk_full: "Kayıt başlatılamadı: yalnızca {free} boş. Yer açıp yeniden deneyin.",
+    meet_detected: "Toplantı algılandı ({app}). Kaydedeyim mi?",
+    meet_record: "Kaydet", meet_not_now: "Bu sefer değil",
   });
 
   const bar = $("recBar");
@@ -63,6 +69,9 @@
         call("set_settings", { rec_notice_done: true }).catch(() => {});
       }
       st = await call("start_meeting", null);
+      if (st && st.error === "disk_full") { toast(t("rec_disk_full", { free: gbText(st.free || 0) })); return; }
+      if (st && st.warning) diskWarning(st.warning);  // it started, but a long meeting may not fit
+      $("meetBar").hidden = true;  // no need to offer recording while it records
       liveOn = !!(st.live && st.live.state === "running");
       poll();
     } catch (e) { toast(t("rec_failed", { e: msg(e) })); }
@@ -74,6 +83,7 @@
     render();
     if (st && st.active) timer = setTimeout(poll, 500);
   }
+  window.onTrayRecord = () => poll();  // started from the tray icon: show the recording bar
 
   function meter(name) {
     const lvl = st.levels[name] ?? 0;
@@ -155,7 +165,44 @@
     hydrateIcons(bar);
   }
 
+  /* "A meeting has started" suggestion (Settings > Recording): the backend watches whether Teams,
+     Zoom, Meet in a browser… has the microphone open. A dismissal is kept until that app lets go. */
+  let meetApp = null, meetDismissed = null, meetTimer = null;
+  async function pollMeeting() {
+    clearTimeout(meetTimer);
+    const bar = $("meetBar");
+    let d;
+    try { d = await call("meeting_detect_status"); }
+    catch { meetTimer = setTimeout(pollMeeting, 15000); return; }
+    const busy = !d || !d.enabled || !d.active || d.recording || (st && st.active);
+    if (busy) {
+      meetApp = null;
+      if (!d || !d.active || !d.enabled) meetDismissed = null;  // the meeting ended (or the option is off)
+      bar.hidden = true; bar.replaceChildren();
+      meetTimer = setTimeout(pollMeeting, 5000);
+      return;
+    }
+    if (meetDismissed && meetDismissed !== d.app) meetDismissed = null; // that app stopped: ask for the next meeting again
+    if (meetDismissed === d.app) { bar.hidden = true; meetTimer = setTimeout(pollMeeting, 5000); return; }
+    if (meetApp !== d.app || !bar.childElementCount) {
+      meetApp = d.app;
+      bar.replaceChildren(el("div", { className: "rechead" },
+        el("span", { className: "recdot" }),
+        el("span", { textContent: t("meet_detected", { app: d.app }) }),
+        el("span", { className: "spacer" }),
+        btn("meet_record", "mic", () => { bar.hidden = true; $("recBtn").click(); }, "small primary"),
+        btn("meet_not_now", "x", () => { meetDismissed = d.app; bar.hidden = true; })));
+      hydrateIcons(bar);
+    }
+    bar.hidden = false;
+    meetTimer = setTimeout(pollMeeting, 5000);
+  }
+
   $("recBtn").onclick = (e) => { e.preventDefault(); e.stopPropagation(); start(); };
-  window.addEventListener("langchange", () => { if (st && st.active) render(); });
-  bridgeReady.then(() => { poll(); setTimeout(leftovers, 1500); });
+  window.addEventListener("langchange", () => {
+    if (st && st.active) render();
+    meetApp = null;  // the banner is written in the new language at the next poll
+    if (!$("meetBar").hidden) pollMeeting();
+  });
+  bridgeReady.then(() => { poll(); setTimeout(leftovers, 1500); pollMeeting(); });
 })();

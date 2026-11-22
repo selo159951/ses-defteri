@@ -33,6 +33,13 @@
     set_rec_mic: "Record the microphone", set_mic_which: "Microphone", set_mic_default: "Windows default microphone",
     set_live_default: "Start live text with every recording (uses the computer more; can be switched during recording)",
     set_rec_note: "The recording stays on this computer. If the app crashes, nothing is lost: it is offered at the next start.",
+    set_purge_label: "Delete the audio of old recordings", set_purge_off: "Never",
+    set_purge_days: "After {n} days", set_purge_hint: "The transcript, speakers and analysis stay; only the sound is deleted, to save disk space. The recording page then shows that the audio is gone.",
+    set_meet_suggest: "Suggest recording when a meeting starts (Teams, Zoom, Meet…)",
+    set_meet_suggest_hint: "Looks at which app is using the microphone. Nothing is recorded until you click Record.",
+    set_tray_label: "Minimise to the system tray when closed", set_tray_hint: "The app keeps running in the tray: open it, start or stop a recording, or quit from its menu.",
+    set_autostart_label: "Start when Windows starts",
+    set_autostart_hint: "This works in the installed version of the app.",
     minutes_btn: "Minutes", minutes_btn_title: "Meeting minutes as Word or PDF: logo, participants, summary, decisions, tasks (Settings page)",
     minutes_no_analysis: "Saved without summary, decisions and tasks: run the meeting analysis first for those.",
     minutes_pdf_template: "A PDF is always made with the built-in layout; your own Word template is used for Word only.",
@@ -69,6 +76,13 @@
     set_rec_mic: "Mikrofonu kaydet", set_mic_which: "Mikrofon", set_mic_default: "Windows'un varsayılan mikrofonu",
     set_live_default: "Kayda başlarken canlı yazıyı da aç (bilgisayarı yorar; kayıt sırasında da açılıp kapatılabilir)",
     set_rec_note: "Kayıt bu bilgisayarda kalır. Program çökerse kayıt kaybolmaz, bir sonraki açılışta sorulur.",
+    set_purge_label: "Eski kayıtların sesini sil", set_purge_off: "Hiçbir zaman",
+    set_purge_days: "{n} gün sonra", set_purge_hint: "Metin, konuşmacılar ve analiz kalır; yalnızca yer açmak için ses silinir. Kayıt sayfasında sesin silindiği yazar.",
+    set_meet_suggest: "Toplantı başlayınca kaydetmeyi öner (Teams, Zoom, Meet…)",
+    set_meet_suggest_hint: "Hangi uygulamanın mikrofonu kullandığına bakar. Siz Kaydet'e basmadan hiçbir şey kaydedilmez.",
+    set_tray_label: "Kapatınca sistem tepsisine küçült", set_tray_hint: "Program tepside çalışmaya devam eder: menüsünden açabilir, kaydı başlatıp durdurabilir ya da çıkabilirsiniz.",
+    set_autostart_label: "Windows açılınca başlat",
+    set_autostart_hint: "Bu seçenek kurulu sürümde çalışır.",
     minutes_btn: "Tutanak", minutes_btn_title: "Word ya da PDF toplantı tutanağı: logo, katılımcılar, özet, kararlar, görevler (Ayarlar sayfası)",
     minutes_no_analysis: "Özet, kararlar ve görevler olmadan kaydedildi: bunlar için önce toplantı analizini çalıştırın.",
     minutes_pdf_template: "PDF her zaman yerleşik düzenle hazırlanır; kendi Word şablonunuz yalnızca Word için kullanılır.",
@@ -203,6 +217,18 @@
     const kids = [box("rec_system", "set_rec_system"), box("rec_mic", "set_rec_mic"),
       el("label", { className: "frow" }, el("span", { textContent: t("set_mic_which") }), mic)];
     if (window.REC_LIVE !== false) kids.push(box("live_default", "set_live_default"));
+    // old recordings: keep the transcript, delete only audio.mp3 (checked at every app start)
+    const purgeDays = Number(r.purge_audio_days) || 0;
+    const purge = el("select", { id: "setPurge" }, el("option", { value: "0", textContent: t("set_purge_off"), selected: !purgeDays }),
+      ...[30, 90, 180].map((n) => el("option", { value: String(n), textContent: t("set_purge_days", { n }), selected: purgeDays === n })));
+    purge.onchange = async () => {
+      try { S.settings = await call("set_settings", { purge_audio_days: Number(purge.value) }); toast(t("set_saved")); }
+      catch (err) { toast(t("set_failed", { e: msg(err) })); }
+    };
+    kids.push(el("label", { className: "frow" }, el("span", { textContent: t("set_purge_label") }), purge),
+      el("p", { className: "sline dim", textContent: t("set_purge_hint") }),
+      box("meeting_suggest", "set_meet_suggest"),
+      el("p", { className: "sline dim", textContent: t("set_meet_suggest_hint") }));
     kids.push(el("p", { className: "sline dim", textContent: t("set_rec_note") }));
     return card(t("set_record"), ...kids);
   }
@@ -217,9 +243,30 @@
       try { S.settings = await call("set_settings", { ui_zoom: Number(sel.value) }); toast(t("set_saved")); }
       catch (e) { toast(t("set_failed", { e: msg(e) })); }
     };
-    return card(t("set_view"),
+    const setBool = (key) => async (e) => {
+      try {
+        S.settings = await call("set_settings", { [key]: e.target.checked });
+        toast(t("set_saved"));
+        if (key === "start_with_windows") draw();  // the registry is the source of truth
+      } catch (err) { e.target.checked = !e.target.checked; toast(t("set_failed", { e: msg(err) })); }
+    };
+    const kids = [
       el("label", { className: "frow" }, el("span", { textContent: t("set_zoom") }), sel),
-      el("p", { className: "sline dim", textContent: t("set_zoom_note") }));
+      el("p", { className: "sline dim", textContent: t("set_zoom_note") })];
+    // the tray option only exists when pystray is installed (backend says so)
+    if (S.settings.tray_available) {
+      kids.push(el("label", { className: "frow check" },
+        el("input", { type: "checkbox", checked: !!S.settings.tray_enabled, onchange: setBool("tray_enabled") }),
+        el("span", { textContent: t("set_tray_label") })),
+        el("p", { className: "sline dim", textContent: t("set_tray_hint") }));
+    }
+    // start with Windows needs the installed app (a fixed exe path in the registry)
+    kids.push(el("label", { className: "frow check" },
+      el("input", { type: "checkbox", checked: !!S.settings.start_with_windows, disabled: !S.settings.autostart_available,
+        onchange: setBool("start_with_windows") }),
+      el("span", { textContent: t("set_autostart_label") })));
+    if (!S.settings.autostart_available) kids.push(el("p", { className: "sline dim", textContent: t("set_autostart_hint") }));
+    return card(t("set_view"), ...kids);
   }
 
   /* ---- backup / restore: the zip work runs in the backend thread, this polls its status ---- */

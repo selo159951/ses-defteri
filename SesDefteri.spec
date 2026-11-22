@@ -12,10 +12,12 @@ for n in os.listdir("models"):
 binaries = []
 hiddenimports = ["backend.bridge", "backend.window", "backend.names", "backend.people",
                  "backend.system_api", "backend.engines.ct2", "backend.engines.whispercpp",
-                 "backend.analysis", "backend.minutes", "backend.meeting_recorder", "backend.updater", "backend.chat", "backend.chatdb", "backend.names_llm", "backend.llm", "backend.llm.catalog", "backend.llm_api"]
+                 "backend.analysis", "backend.minutes", "backend.meeting_recorder", "backend.updater", "backend.chat", "backend.chatdb", "backend.names_llm", "backend.llm", "backend.llm.catalog", "backend.llm_api",
+                 "backend.disk", "backend.tray", "backend.autostart", "backend.meeting_detect"]
 # packages with native DLLs or data files (VAD model, docx template, WebView2 bridge …)
 for pkg in ("faster_whisper", "ctranslate2", "sherpa_onnx", "onnxruntime", "av", "webview",
-            "clr_loader", "pythonnet", "tokenizers", "docx", "sounddevice", "_sounddevice_data", "soundcard", "cffi"):
+            "clr_loader", "pythonnet", "tokenizers", "docx", "sounddevice", "_sounddevice_data", "soundcard", "cffi",
+            "pystray", "PIL", "comtypes", "pycaw"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
 

@@ -8,6 +8,21 @@ const fold = (s) => s.replace(/[İIı]/g, "i").toLowerCase();
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const plural = (n, one, many) => (n === 1 ? t(one) : t(many, { n }));
+/* Disk space: the backend returns bytes, the messages show "1,4 GB" in the page's language. */
+Object.assign(I18N.en, {
+  disk_low: "Low disk space ({free}). A long recording may not fit.",
+  disk_full: "There is not enough free disk space. Free some space and try again.",
+  skip_disk_full: 'Not enough free disk space to process "{name}". Free some space and try again.',
+  audio_deleted: "The audio file of this recording was deleted to save space. The transcript is still here.",
+});
+Object.assign(I18N.tr, {
+  disk_low: "Diskte az yer var ({free}). Uzun kayıt sığmayabilir.",
+  disk_full: "Diskte yeterli yer yok. Yer açıp yeniden deneyin.",
+  skip_disk_full: '"{name}" için diskte yeterli yer yok. Yer açıp yeniden deneyin.',
+  audio_deleted: "Yer açmak için bu kaydın ses dosyası silindi. Metin duruyor.",
+});
+const gbText = (b) => `${(b / (1024 ** 3)).toLocaleString(LANG, { maximumFractionDigits: 1 })} GB`;
+const diskWarning = (w) => toast(t(w?.code === "disk_full" ? "disk_full" : "disk_low", { free: gbText(w?.free || 0) }));
 let job = null, stopAt = null, dirty = {}, saveTimer = null, segSpk = {}, spkNames = {};
 let undoStack = [], gpuState = null;
 
@@ -211,6 +226,8 @@ window.onJobsStarted = (list) => {
   const bad = (list || []).filter((r) => r.skipped);
   (list || []).filter((r) => r.id).forEach(window.onJobStarted);
   if (bad.length) showNote(bad.map((r) => t("skip_" + r.code, { name: r.filename }) || r.error).join("\n"));
+  const low = (list || []).find((r) => r.id && r.warning);  // one warning is enough, however many files were added
+  if (low) diskWarning(low.warning);
   loadJobs();
 };
 function showNote(text) {
@@ -402,7 +419,11 @@ async function openJob(id) {
   catch (e) { $("segs").replaceChildren(); throw e; }
   undoStack = []; updateUndo();
   $("title").textContent = j.filename + (j.language ? `  (${j.language})` : "");
-  $("audio").src = `${MEDIA}/${id}/audio.mp3`;
+  // the audio of old recordings can be deleted to save space (Settings > Recording): no player then
+  $("audioGone").hidden = !j.audio_deleted;
+  $("player").hidden = !!j.audio_deleted;
+  if (j.audio_deleted) $("audio").removeAttribute("src");
+  else $("audio").src = `${MEDIA}/${id}/audio.mp3`;
   $("q").value = ""; $("fSpk").value = ""; $("fEdited").checked = false; $("fMatch").checked = false;
   applyJob(j);
   fadeIn($("segs"));

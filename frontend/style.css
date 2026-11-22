@@ -474,6 +474,11 @@ dialog .empty { padding:18px 6px; }
 .livebox { margin-top:8px; max-height:180px; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
 .livebox p { margin:3px 0; }
 .recbar .livenote { margin:4px 0 0; font-size:14px; }
+/* "a meeting was detected" suggestion (recorder.js): same shape as the recording bar, calmer colour */
+.meetbar { background:var(--s2); }
+.meetbar .recdot { animation:none; }
+.audiogone { margin:0 0 12px; padding:6px 12px; border:1px solid var(--line); border-radius:8px;
+  background:var(--card); font-size:14px; }
 @media (prefers-reduced-motion: reduce) { .recdot { animation:none; } }
 .pcard .pinfo { gap:8px; flex-wrap:wrap; }
 .pcard .pinfo .ptitle { flex:0 1 240px; } .pcard .pinfo .pnote { flex:1 1 300px; }
