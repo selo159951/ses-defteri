@@ -146,6 +146,52 @@ class Api(SystemApi, LlmApi, SearchApi):
         _job(job_id)
         return store.rename_job(job_id, name)
 
+    # ---------------- star, tags, bulk actions (recordings list) ----------------
+    def set_job_star(self, job_id: str, starred: bool) -> dict:
+        _job(job_id)
+        store.set_star(job_id, bool(starred))
+        return {"ok": True}
+
+    def set_job_tags(self, job_id: str, tags: list) -> dict:
+        _job(job_id)
+        clean = store.clean_tags(tags)
+        store.update_job(job_id, tags=clean)
+        return {"ok": True, "tags": clean}
+
+    def list_tags(self) -> list[str]:
+        """Every tag in use, for the tag filter and the edit suggestions."""
+        return store.list_tags()
+
+    def delete_jobs(self, ids: list) -> dict:
+        """Bulk delete from the recordings list (the page asked confirm() already)."""
+        deleted = store.delete_jobs(ids)
+        return {"ok": True, "deleted": len(deleted)}
+
+    def export_jobs(self, ids: list, fmt: str = "docx", lang: str = "en") -> dict:
+        """Several recordings into one folder, picked once. Each job's edited transcript as one file.
+        Returns {"paths": [...]} or {"cancelled": True}."""
+        import webview
+
+        if fmt not in EXPORT_TYPES:
+            return {"error": "bad format"}
+        jobs = [_job(str(i)) for i in ids or []]
+        if not jobs:
+            raise ValueError("no recordings chosen")
+        folder = _first(self._window().create_file_dialog(webview.FileDialog.FOLDER, directory=self._last_dir()))
+        if not folder:
+            return {"cancelled": True}
+        out = []
+        for data in jobs:
+            stem = _safe_name(Path(data["filename"]).stem)
+            target, n = Path(folder) / f"{stem}.{fmt}", 2
+            while target.exists():  # two recordings can have the same name
+                target = Path(folder) / f"{stem} ({n}).{fmt}"
+                n += 1
+            _write(target, export.render(data, "edited", fmt, lang))
+            out.append(str(target))
+        self._remember_dir("export_dir", str(folder))
+        return {"paths": out}
+
     def start_job(self, path: str) -> dict:
         """Start transcribing a file that is on disk (drag & drop or file picker).
         The job takes the next place in the line: files are processed one at a time, first come first served."""
@@ -852,6 +898,54 @@ class Api(SystemApi, LlmApi, SearchApi):
 
         if isinstance(url, str) and url.startswith(("https://", "http://")):
             webbrowser.open(url)
+
+    # ---------------- backup / restore (Settings > Backup) ----------------
+    def backup_create(self) -> dict:
+        """Native Save dialog, then the data folder is zipped in a thread (backup_status is polled)."""
+        import webview
+
+        from . import backup
+
+        if backup.status()["busy"]:
+            raise ValueError("a backup is already being made")
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.SAVE, directory=self._last_dir(), save_filename=backup.default_name(),
+            file_types=("Backup (*.zip)",)))
+        if not chosen:
+            return {"cancelled": True}
+        target = Path(chosen)
+        if target.suffix.lower() != ".zip":
+            target = target.with_name(target.name + ".zip")
+        self._remember_dir("export_dir", str(target.parent))
+        backup.run_in_thread("backup", lambda: backup.create(target), path=str(target))
+        return {"started": True, "path": str(target)}
+
+    def backup_restore_pick(self) -> dict:
+        """Open dialog for a .zip and check it is one of ours. Nothing is changed yet:
+        the page shows confirm() and only then calls backup_restore."""
+        import webview
+
+        from . import backup
+
+        chosen = _first(self._window().create_file_dialog(
+            webview.FileDialog.OPEN, directory=self._last_dir(), file_types=("Backup (*.zip)",)))
+        if not chosen:
+            return {"cancelled": True}
+        return {"path": str(chosen), "manifest": backup.read_manifest(Path(chosen))}  # raises on a foreign zip
+
+    def backup_restore(self, zip_path: str) -> dict:
+        """Extract the backup over the data folder in a thread. The current data is saved first."""
+        from . import backup
+
+        if backup.status()["busy"]:
+            raise ValueError("a backup is already being made")
+        backup.run_in_thread("restore", lambda: backup.restore(zip_path), path=str(zip_path))
+        return {"started": True}
+
+    def backup_status(self) -> dict:
+        from . import backup
+
+        return backup.status()
 
     # ---- people ----
     def list_people(self) -> list[dict]:

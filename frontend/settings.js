@@ -16,6 +16,14 @@
     set_template_help: "Write placeholders in curly brackets in your Word file, e.g. {date} as {tarih}, {summary} as {özet}, a paragraph with only {kararlar} for the decisions, and a table row with {görev.kim} {görev.ne} {görev.tarih} for the tasks. The sample template lists them all.",
     set_template_pick: "Load template…", set_template_sample: "Download sample template", set_template_remove: "Use built-in layout",
     set_tab_view: "Appearance", set_tab_record: "Recording", set_tab_minutes: "Minutes", set_tab_updates: "Updates",
+    set_tab_backup: "Backup",
+    set_backup: "Backup", set_backup_take: "Make backup…", set_backup_restore: "Restore from backup…",
+    set_backup_note: "A .zip of your recordings, transcripts, people and settings. Models are not included; they are downloaded again when needed. Runs on this PC only.",
+    backup_started: "Making the backup…", backup_working: "Making the backup…", restore_working: "Restoring the backup…",
+    backup_done: "Backup saved: {p}", backup_failed: "Backup failed: {e}",
+    restore_confirm: "Restore this backup ({v}, made {d})? Everything in the data folder is replaced by it. Your current data is saved first, next to the backup file.",
+    restore_started: "Restoring…",
+    restore_done: "Restore finished. Close and open the app again to see the restored data.",
     set_view: "View", set_zoom: "Interface size", set_zoom_default: "normal", set_zoom_note: "Makes text, buttons and boxes bigger or smaller. Ctrl + mouse wheel changes it too; the size is remembered.",
     set_updates: "Updates", set_update_auto: "Check for a new version when the app starts",
     set_update_note: "The only internet use of the app: it reads a small version file. No recording or text is ever sent.",
@@ -43,6 +51,14 @@
     set_template_help: "Word dosyanıza süslü parantez içinde yer tutucular yazın: {tarih}, {özet}, {katılımcılar}; kararlar için tek başına {kararlar} yazılı bir paragraf; görevler için {görev.kim} {görev.ne} {görev.tarih} yazılı bir tablo satırı. Örnek şablonda hepsi listeli.",
     set_template_pick: "Şablon yükle…", set_template_sample: "Örnek şablonu indir", set_template_remove: "Yerleşik düzeni kullan",
     set_tab_view: "Görünüm", set_tab_record: "Kayıt", set_tab_minutes: "Tutanak", set_tab_updates: "Güncelleme",
+    set_tab_backup: "Yedek",
+    set_backup: "Yedek", set_backup_take: "Yedek al…", set_backup_restore: "Yedekten geri yükle…",
+    set_backup_note: "Kayıtlarınızın, metinlerinin, kişilerin ve ayarların .zip yedeği. Modeller dahil değildir; gerektiğinde yeniden indirilir. Yalnızca bu bilgisayarda çalışır.",
+    backup_started: "Yedek hazırlanıyor…", backup_working: "Yedek hazırlanıyor…", restore_working: "Yedek geri yükleniyor…",
+    backup_done: "Yedek kaydedildi: {p}", backup_failed: "Yedek alınamadı: {e}",
+    restore_confirm: "Bu yedek geri yüklensin mi ({v}, {d})? Veri klasöründeki her şey onunla değişir. Mevcut verileriniz önce, yedek dosyasının yanına kaydedilir.",
+    restore_started: "Geri yükleniyor…",
+    restore_done: "Geri yükleme tamamlandı. Geri yüklenenleri görmek için programı kapatıp yeniden açın.",
     set_view: "Görünüm", set_zoom: "Arayüz boyutu", set_zoom_default: "normal", set_zoom_note: "Yazıları, düğmeleri ve kutuları büyütür ya da küçültür. Ctrl + fare tekerleğiyle de değişir; seçilen boyut hatırlanır.",
     set_updates: "Güncellemeler", set_update_auto: "Program açılırken yeni sürüm var mı diye bak",
     set_update_note: "Programın tek internet kullanımı budur: küçük bir sürüm dosyası okunur. Hiçbir kayıt ya da metin gönderilmez.",
@@ -69,7 +85,7 @@
 
   const root = $("settings");
   const ALL = ["participants", "summary", "chapters", "decisions", "tasks", "questions", "transcript"];
-  const S = { cfg: null, settings: null, info: null, upd: "" };
+  const S = { cfg: null, settings: null, info: null, upd: "", bk: "", bkBusy: false };
   const msg = (e) => (e && e.message) || String(e);
 
   async function load() {
@@ -193,6 +209,56 @@
       el("p", { className: "sline dim", textContent: t("set_zoom_note") }));
   }
 
+  /* ---- backup / restore: the zip work runs in the backend thread, this polls its status ---- */
+  function backupText(st) {
+    if (!st || (!st.busy && !st.done && !st.error)) return "";
+    if (st.busy) return st.kind === "restore" ? t("restore_working") : t("backup_working");
+    if (st.error) return t("backup_failed", { e: st.error });
+    return st.kind === "restore" ? t("restore_done") : t("backup_done", { p: st.result?.path || st.path });
+  }
+
+  function backupCard() {
+    const busy = !!S.bkBusy;
+    const take = button("set_backup_take", "download", async () => {
+      try {
+        const r = await call("backup_create"); // native Save dialog, then the thread starts
+        if (!r.cancelled) toast(t("backup_started"));
+      } catch (e) { toast(t("set_failed", { e: msg(e) })); }
+    });
+    take.id = "backupTake";
+    const restore = button("set_backup_restore", "archive", async () => {
+      try {
+        const r = await call("backup_restore_pick"); // opens the zip and checks its manifest
+        if (r.cancelled) return;
+        const m = r.manifest || {};
+        if (!confirm(t("restore_confirm", { v: m.version || "?", d: String(m.created || "").replace("T", " ") }))) return;
+        await call("backup_restore", r.path);
+        toast(t("restore_started"));
+      } catch (e) { toast(t("set_failed", { e: msg(e) })); }
+    });
+    restore.id = "backupRestore";
+    take.disabled = restore.disabled = busy;
+    return card(t("set_backup"),
+      el("p", { className: "sline dim", textContent: t("set_backup_note") }),
+      el("div", { className: "btnrow" }, take, restore),
+      el("div", { className: "sline", id: "backupMsg", textContent: S.bk || "" }));
+  }
+
+  let bkSig = "";
+  setInterval(() => { // cheap while another tab or page is showing: only the Yedek tab has the elements
+    if (root.hidden || S.tab !== "backup") return;
+    call("backup_status").then((st) => {
+      const sig = JSON.stringify(st);
+      if (sig === bkSig) return;
+      const wasDone = bkSig && JSON.parse(bkSig).done;
+      bkSig = sig;
+      S.bk = backupText(st); S.bkBusy = !!st.busy;
+      const m = $("backupMsg"); if (m) m.textContent = S.bk;
+      for (const id of ["backupTake", "backupRestore"]) { const b = $(id); if (b) b.disabled = !!st.busy; }
+      if (st.done && !wasDone && st.kind === "restore") toast(t("restore_done"));
+    }).catch(() => { /* shown again next second */ });
+  }, 1000);
+
   function updateCard() {
     const auto = el("input", { type: "checkbox", id: "setUpdAuto", checked: S.settings.update_check !== false });
     auto.onchange = async () => {
@@ -223,6 +289,7 @@
       ["view", "eye", "set_tab_view", () => [viewCard()]],
       ["record", "mic", "set_tab_record", () => [recordCard()]],
       ["minutes", "file-text", "set_tab_minutes", () => window.SIMPLE_EDITION ? [companyCard()] : [companyCard(), minutesCard(), templateCard()]],
+      ["backup", "archive", "set_tab_backup", () => [backupCard()]],
       ["updates", "refresh", "set_tab_updates", () => [updateCard()]],
     ];
     if (!tabs.some(([id]) => id === S.tab)) S.tab = "view";

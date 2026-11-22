@@ -189,6 +189,8 @@ def list_jobs(q: str = "") -> list[dict]:
         names = [v for k, v in sorted(d.get("speakers", {}).items())
                  if any(s["speaker"] == int(k) for s in segs)]
         item = {k: d.get(k) for k in ("id", "filename", "created", "status", "duration", "language", "error")}
+        item["starred"] = bool(d.get("starred"))
+        item["tags"] = [str(x) for x in d.get("tags") or []]
         if d.get("analysis"):
             item["analysis"] = {"state": d["analysis"].get("state")}
         item.update(speakers=names, lines=len(segs),
@@ -221,6 +223,44 @@ def rename_job(job_id: str, name: str) -> dict:
 def delete_job(job_id: str) -> None:
     with _lock:
         shutil.rmtree(job_path(job_id), ignore_errors=True)
+
+
+def delete_jobs(job_ids) -> list[str]:
+    """Remove several jobs at once (the recordings list's bulk delete).
+    A bad id raises before anything is deleted, so a typo cannot delete half of a selection."""
+    ids = [str(i) for i in job_ids or []]
+    for i in ids:
+        job_path(i)  # raises ValueError on a bad id
+    for i in ids:
+        delete_job(i)
+    return ids
+
+
+def set_star(job_id: str, on: bool) -> dict:
+    return update_job(job_id, starred=bool(on))
+
+
+def clean_tags(tags) -> list[str]:
+    """Whatever the page sends -> short, unique, non-empty tags."""
+    out, seen = [], set()
+    for tag in tags if isinstance(tags, (list, tuple)) else [tags]:
+        tag = "" if tag is None else str(tag).strip()[:40]
+        if tag and tag not in seen:
+            seen.add(tag)
+            out.append(tag)
+    return out[:20]
+
+
+def set_tags(job_id: str, tags) -> dict:
+    return update_job(job_id, tags=clean_tags(tags))
+
+
+def list_tags() -> list[str]:
+    """Every tag in use, A-Z (forgiving i/ı compare like everywhere else)."""
+    out: set[str] = set()
+    for j in list_jobs():
+        out.update(j.get("tags") or [])
+    return sorted(out, key=_fold)
 
 
 @_locked

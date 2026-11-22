@@ -96,6 +96,10 @@
         <option value="running" data-i18n="st_running"></option><option value="error" data-i18n="st_error"></option>
       </select>
       <select id="jLang"></select>
+      <select id="jStar">
+        <option value="" data-i18n="all"></option><option value="1" data-i18n="starred_only"></option>
+      </select>
+      <select id="jTag"></select>
       <select id="jSort">
         <option value="new" data-i18n="sort_new"></option><option value="old" data-i18n="sort_old"></option>
         <option value="name" data-i18n="sort_name"></option><option value="long" data-i18n="sort_long"></option>
@@ -104,6 +108,7 @@
     </div>
   </div>
   <div id="semBox" hidden></div>
+  <div id="bulkBar" hidden></div>
   <ul id="jobs"></ul>
   <div id="jobsEmpty" hidden></div>
   <p class="credits" id="creditsLine"></p>
