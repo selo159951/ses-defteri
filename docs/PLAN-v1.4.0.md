@@ -1,6 +1,7 @@
 # Ses Defteri 1.4.0 planı
 
-Kaynak: kullanıcının 22.11.2026 gece istekleri. 1.3.1 yayınlandıktan sonra başlanır. Kod EVREN'e (deepseek-v4.1-flash; glm-5.3 boşsa) yazdırılır, Claude kontrol eder.
+Kaynak: kullanıcının 22.11.2026 gece istekleri. 1.3.1 ayrıca YAYINLANMAZ: önce özellikler kodlanır, sonra test, sonra doğrudan 1.4.0 yayını.
+Kullanıcının seçimi: A'nın hepsi; B'den 1, 3, 5, 6, 7, 9 (yedek alma + geri yükleme), 10, 11 (isteğe bağlı ayar). B 2, 4, 8, 12 YOK. Kod EVREN'e (deepseek-v4.1-flash; glm-5.3 boşsa) yazdırılır, Claude kontrol eder.
 
 ## A. Kullanıcının istedikleri
 1. [ ] **Asistan iş yapabilsin (eylemler).** Model yalnızca cevap vermesin, uygulamada işlem de yapsın; her işlemden önce kullanıcıya düğmeyle onay sorulsun.
