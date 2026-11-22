@@ -80,6 +80,21 @@ def ui_zoom() -> float:
     return clamp_zoom(asr.get_settings().get("ui_zoom", 1.0))
 
 
+def _drop_recording_folder(source_path: str | None) -> None:
+    """Delete a recording made in the app (its raw folder) once its job is finished with its own audio.mp3.
+    Only a folder directly under recordings/ is ever removed: never a file the user added."""
+    from . import meeting_recorder
+
+    if not source_path:
+        return
+    try:
+        folder = Path(source_path).parent.resolve()
+        if folder.parent == meeting_recorder.recordings_dir().resolve():
+            meeting_recorder.done(folder)
+    except OSError:
+        pass
+
+
 class Api(SystemApi, LlmApi, SearchApi):
     """Methods starting with "_" are not exposed to the page."""
 
@@ -196,7 +211,12 @@ class Api(SystemApi, LlmApi, SearchApi):
             raise ValueError("the audio of this recording is missing - add the file again")
         store.update_job(job_id, status="queued", stage="queued", error=None)
         pipeline.enqueue(job_id)  # a resumed recording goes to the end of the line
-        threading.Thread(target=run_job, args=(job_id, None), kwargs={"resume": True}, daemon=True).start()
+
+        def run():
+            run_job(job_id, None, resume=True)
+            if job.get("recorded"):  # a recording made in the app: its raw folder is no longer needed either
+                _drop_recording_folder(job.get("source_path"))
+        threading.Thread(target=run, daemon=True).start()
         return {"id": job_id, "filename": job["filename"]}
 
     def pick_and_start(self) -> list:
@@ -407,9 +427,6 @@ class Api(SystemApi, LlmApi, SearchApi):
         return {"active": False}
 
     def _start_recording_job(self, wav: Path) -> dict:
-        from . import meeting_recorder
-
-        folder = wav.parent
         job_id = store.create_job(wav.name)
         store.update_job(job_id, source_path=str(wav), recorded=True)
         pipeline.enqueue(job_id)
@@ -417,7 +434,7 @@ class Api(SystemApi, LlmApi, SearchApi):
         def run():
             run_job(job_id, wav, keep_source=True)
             if (store.job_path(job_id) / "audio.mp3").exists():  # the job has its own copy: drop the raw recording
-                meeting_recorder.done(folder)
+                _drop_recording_folder(str(wav))
         threading.Thread(target=run, daemon=True).start()
         return {"id": job_id, "filename": wav.name}
 
