@@ -283,27 +283,88 @@ def consolidate(turns: list[Turn], min_seconds: float = MIN_BIG_SECONDS, share: 
     return out
 
 
-def diarize(samples: np.ndarray, progress: Callable[[float], None], cancel=None) -> list[Turn]:
-    """Returns turns with 0-based speakers ordered by first appearance. Empty if models missing."""
-    if not models_available():
-        return []
-
+def _in_process(samples: np.ndarray, num_clusters: int, progress, cancel) -> list[Turn]:
     def cb(done, total, *_):
         if cancel is not None and cancel.is_set():
             return 1  # non-zero stops sherpa-onnx
         progress(done / max(total, 1))
         return 0
 
-    sd = _make(-1)
-    result = sd.process(samples, callback=cb).sort_by_start_time()
+    result = _make(num_clusters).process(samples, callback=cb).sort_by_start_time()
     if cancel is not None and cancel.is_set():
         raise Cancelled()
-    raw = [Turn(r.start, r.end, r.speaker) for r in result]
+    return [Turn(r.start, r.end, r.speaker) for r in result]
+
+
+def _worker(path: str, num_clusters: int, q) -> None:
+    """Runs in its own process (see _process)."""
+    try:
+        samples = np.load(path)
+
+        def cb(done, total, *_):
+            q.put(("p", done / max(total, 1)))
+            return 0
+
+        result = _make(num_clusters).process(samples, callback=cb).sort_by_start_time()
+        q.put(("r", [(r.start, r.end, r.speaker) for r in result]))
+    except BaseException as e:  # noqa: BLE001 - reported to the parent
+        q.put(("e", f"{type(e).__name__}: {e}"))
+
+
+def _process(samples: np.ndarray, num_clusters: int, progress, cancel) -> list[Turn]:
+    """sherpa-onnx keeps Python's lock (GIL) for the whole separation: on a long meeting that is minutes in which no
+    other thread runs and the window stops answering ("Not responding"). So it runs in a separate process; the app
+    only reads progress from a queue. Short audio (under 3 minutes) stays in this process: starting one costs more."""
+    if len(samples) < 180 * 16000 or os.environ.get("SESDEFTERI_DIAR_INPROC"):
+        return _in_process(samples, num_clusters, progress, cancel)
+    import multiprocessing as mp
+    import queue
+    import tempfile
+
+    ctx = mp.get_context("spawn")
+    fd, path = tempfile.mkstemp(suffix=".npy", prefix="sesdefteri-diar-")
+    os.close(fd)
+    np.save(path, np.ascontiguousarray(samples, dtype=np.float32))
+    q = ctx.Queue()
+    proc = ctx.Process(target=_worker, args=(path, num_clusters, q), daemon=True, name="diarize")
+    proc.start()
+    try:
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise Cancelled()
+            try:
+                kind, val = q.get(timeout=0.2)
+            except queue.Empty:
+                if not proc.is_alive() and q.empty():
+                    raise RuntimeError(f"speaker separation stopped unexpectedly (exit code {proc.exitcode})")
+                continue
+            if kind == "p":
+                progress(val)  # may raise (the job was paused or cancelled): the finally below ends the process
+            elif kind == "r":
+                return [Turn(a, b, c) for a, b, c in val]
+            else:
+                raise RuntimeError(val)
+    finally:
+        if proc.is_alive():
+            proc.terminate()
+        proc.join(5)
+        q.close()
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def diarize(samples: np.ndarray, progress: Callable[[float], None], cancel=None) -> list[Turn]:
+    """Returns turns with 0-based speakers ordered by first appearance. Empty if models missing."""
+    if not models_available():
+        return []
+
+    raw = _process(samples, -1, progress, cancel)
     if len({t.speaker for t in raw}) > MAX_SPEAKERS:
         many = consolidate(raw)  # a class or a panel keeps its people apart ...
         if many is None:  # ... an ordinary meeting is forced down to a few speakers
-            result = _make(MAX_SPEAKERS).process(samples, callback=cb).sort_by_start_time()
-            raw = [Turn(r.start, r.end, r.speaker) for r in result]
+            raw = _process(samples, MAX_SPEAKERS, progress, cancel)
         else:
             raw = many
     order: dict[int, int] = {}

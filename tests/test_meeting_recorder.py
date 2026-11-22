@@ -252,3 +252,28 @@ def test_mix_turns_down_the_speaker_echo_and_keeps_the_users_voice():
     assert rms(sys_part - lifted) < 0.15 * rms(lifted)  # echo is barely in the mix: the far side stays one clean voice
     assert rms(out[int(1.2 * sr): int(1.8 * sr)]) > 0.08  # the user's own voice is kept (and lifted)
     assert rms(out[int(2.5 * sr): int(3.5 * sr)]) < 0.01  # mic room noise is turned down between words
+
+
+def test_recovered_recording_is_not_offered_or_queued_twice(monkeypatch):
+    from backend import bridge, store
+
+    rec = mr.MeetingRecorder({"mic": FakeDev()}).start()
+    wait_for(lambda: rec.seconds() >= 1.5)
+    rec._stop.set()
+    for t in rec._threads:
+        t.join()
+    mr._active.clear()
+    started = []
+    api = bridge.Api(lambda: None)
+
+    def fake_start(wav):  # what _start_recording_job stores, without running the speech model
+        jid = store.create_job(wav.name)
+        store.update_job(jid, source_path=str(wav), recorded=True)
+        started.append(jid)
+        return {"id": jid, "filename": wav.name}
+
+    monkeypatch.setattr(api, "_start_recording_job", fake_start)
+    folder = api.rec_leftovers()[0]["folder"]
+    first = api.recover_recording(folder)
+    assert api.rec_leftovers() == []  # it is in the list now: the banner must not offer it again
+    assert api.recover_recording(folder)["id"] == first["id"] and len(started) == 1

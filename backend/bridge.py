@@ -421,14 +421,32 @@ class Api(SystemApi, LlmApi, SearchApi):
         threading.Thread(target=run, daemon=True).start()
         return {"id": job_id, "filename": wav.name}
 
+    @staticmethod
+    def _job_of_folder() -> dict[str, dict]:
+        """{recording folder name: job} for recordings already in the list (queued, running or paused)."""
+        out = {}
+        for j in store.list_jobs():
+            try:
+                sp = store.read_transcript(j["id"]).get("source_path")
+            except (OSError, ValueError):
+                continue
+            if sp:
+                out[Path(sp).parent.name] = j
+        return out
+
     def rec_leftovers(self) -> list:
+        """Recordings cut off by a crash. One that already has a job is not offered again: it would be queued twice."""
         from . import meeting_recorder
 
-        return meeting_recorder.leftovers()
+        used = self._job_of_folder()
+        return [l for l in meeting_recorder.leftovers() if l["folder"] not in used]
 
     def recover_recording(self, folder: str) -> dict:
         from . import meeting_recorder
 
+        job = self._job_of_folder().get(Path(str(folder)).name)
+        if job:  # a second click, or a second window: the recording is already in the list
+            return {"id": job["id"], "filename": job.get("filename", "")}
         return self._start_recording_job(meeting_recorder.recover(folder))
 
     def discard_recording(self, folder: str) -> list:

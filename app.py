@@ -77,4 +77,7 @@ def main():
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()  # the speaker separation runs in a child process (backend/diarize.py)
     main()
