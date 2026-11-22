@@ -144,6 +144,7 @@
       el("span", { className: "recdot paused" }),
       el("span", { textContent: t("rec_leftover", { t: l.title, d: dur(l.seconds) }) }), el("span", { className: "spacer" }),
       btn("rec_recover", "check", async () => {
+        for (const b of bar.querySelectorAll("button")) b.disabled = true; // one click only
         try { await call("recover_recording", l.folder); toast(t("rec_queued")); loadJobs(); } catch (e) { toast(msg(e)); }
         delete bar.dataset.leftover; bar.hidden = true; leftovers();
       }, "small primary"),

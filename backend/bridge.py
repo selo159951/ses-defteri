@@ -6,6 +6,8 @@ JSON-able data; raising an exception rejects the JS promise with its message.
 """
 from __future__ import annotations
 
+import sys
+
 import os
 import subprocess
 import threading
@@ -28,6 +30,19 @@ EXPORT_TYPES = {
 MEDIA_EXT = "*.mp3;*.wav;*.m4a;*.mp4;*.ogg;*.opus;*.flac;*.aac;*.webm;*.mkv;*.mov;*.wma;*.amr;*.3gp"
 MEDIA_SUFFIXES = {"." + e.split(".")[-1] for e in MEDIA_EXT.split(";")}
 MEDIA_TYPES = (f"Audio and video ({MEDIA_EXT})", "All files (*.*)")
+
+ZOOM_MIN, ZOOM_MAX = 0.7, 2.0
+
+
+def clamp_zoom(z) -> float:
+    try:
+        return round(min(ZOOM_MAX, max(ZOOM_MIN, float(z))), 2)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def ui_zoom() -> float:
+    return clamp_zoom(asr.get_settings().get("ui_zoom", 1.0))
 
 
 def _safe_name(s: str, limit: int = 80) -> str:
@@ -80,6 +95,29 @@ def _drop_recording_source(job_id: str, source_path: str | None) -> None:
         return
     if folder.parent == base and _job_audio_ready(job_id):
         meeting_recorder.done(folder)
+
+
+def _job_of_folder(folder: str) -> dict | None:
+    """The job in the list that already uses this recording folder, if any ({"id", "filename"})."""
+    from . import meeting_recorder
+
+    try:
+        want = (meeting_recorder.recordings_dir() / Path(folder).name).resolve()
+    except OSError:
+        return None
+    for j in store.list_jobs():
+        try:
+            source = store.read_transcript(j["id"]).get("source_path")
+        except (OSError, ValueError):
+            continue
+        if not source:
+            continue
+        try:
+            if Path(source).parent.resolve() == want:
+                return {"id": j["id"], "filename": j["filename"]}
+        except OSError:
+            continue
+    return None
 
 
 class Api(SystemApi, LlmApi):
@@ -299,6 +337,7 @@ class Api(SystemApi, LlmApi):
                 "denoise_answers": len(denoise.answers()),
                 "tour_home_done": bool(asr.get_settings().get("tour_home_done", False)),
                 "tour_job_done": bool(asr.get_settings().get("tour_job_done", False)),
+                "ui_zoom": ui_zoom(),
                 "update_check": updater.enabled(), **self._rec_settings()}
 
     def set_settings(self, values: dict) -> dict:
@@ -319,6 +358,9 @@ class Api(SystemApi, LlmApi):
                 asr.set_setting(key, bool(values[key]))
         if values.get("language") in asr.LANGUAGES:
             asr.set_setting("language", values["language"])
+        if "ui_zoom" in values:
+            asr.set_setting("ui_zoom", clamp_zoom(values["ui_zoom"]))
+            self.apply_zoom()
         if "update_check" in values:
             asr.set_setting("update_check", bool(values["update_check"]))
         for key in ("rec_system", "rec_mic", "live_default", "rec_notice_done"):
@@ -327,6 +369,37 @@ class Api(SystemApi, LlmApi):
         if "rec_mic_id" in values:
             asr.set_setting("rec_mic_id", str(values["rec_mic_id"] or "")[:300])
         return self.get_settings()
+
+    def apply_zoom(self, z: float | None = None) -> None:
+        """Interface size: WebView2's own zoom (like Ctrl + / - in a browser), so the layout stays right."""
+        win = self._get_window() if self._get_window else None
+        wv = getattr(getattr(getattr(win, "native", None), "browser", None), "webview", None)
+        if wv is None:
+            return
+        z = ui_zoom() if z is None else z
+        try:
+            from System import Action  # pythonnet: WinForms controls must be touched on their own thread
+
+            wv.Invoke(Action(lambda: setattr(wv, "ZoomFactor", z)))
+        except Exception as e:
+            print("zoom:", e, file=sys.stderr)
+
+    def watch_zoom(self) -> None:
+        """Ctrl + mouse wheel changes the zoom too: remember it."""
+        win = self._get_window() if self._get_window else None
+        wv = getattr(getattr(getattr(win, "native", None), "browser", None), "webview", None)
+        if wv is None:
+            return
+
+        def changed(sender, _args):
+            z = clamp_zoom(sender.ZoomFactor)
+            if abs(z - ui_zoom()) > 0.001:
+                asr.set_setting("ui_zoom", z)
+        try:
+            wv.ZoomFactorChanged += changed
+        except Exception as e:
+            print("zoom watch:", e, file=sys.stderr)
+
 
     # ---------------- meeting recording (computer sound + microphone) ----------------
     LIVE_TEXT = False  # simple edition: no live text
@@ -447,20 +520,14 @@ class Api(SystemApi, LlmApi):
         again: that job has its own "Devam et" button."""
         from . import meeting_recorder
 
-        used = set()
-        for j in store.list_jobs():
-            try:
-                sp = store.read_transcript(j["id"]).get("source_path")
-            except (OSError, ValueError):
-                continue
-            if sp:
-                used.add(str(Path(sp).parent.resolve()))
-        return [l for l in meeting_recorder.leftovers()
-                if str((meeting_recorder.recordings_dir() / l["folder"]).resolve()) not in used]
+        return [l for l in meeting_recorder.leftovers() if _job_of_folder(l["folder"]) is None]
 
     def recover_recording(self, folder: str) -> dict:
         from . import meeting_recorder
 
+        job = _job_of_folder(folder)
+        if job:  # the recording was already queued once: no duplicate job in the list
+            return job
         return self._start_recording_job(meeting_recorder.recover(folder))
 
     def discard_recording(self, folder: str) -> list:

@@ -24,5 +24,27 @@
     container.classList.remove("fadein");
     void container.offsetWidth; // restart the animation
     container.classList.add("fadein");
+    // a list that refreshes every second would otherwise restart the fade every time: run it once
+    clearTimeout(container._fadeTimer);
+    container._fadeTimer = setTimeout(() => container.classList.remove("fadein"), 700);
+  };
+  /* A short message where a list or page has nothing to show yet. Can be used as
+     emptyState(text[, hint]) -> element or emptyState(container, text[, hint]) -> container. */
+  window.emptyState = (container, text, hint) => {
+    if (typeof container === "string") { hint = text; text = container; container = null; }
+    const box = document.createElement("div");
+    box.className = "empty-state";
+    const title = document.createElement("p");
+    title.className = "empty-state-title";
+    title.textContent = text || "";
+    box.append(title);
+    if (hint) {
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.textContent = hint;
+      box.append(note);
+    }
+    if (container) { container.replaceChildren(box); return container; }
+    return box;
   };
 })();

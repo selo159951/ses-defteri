@@ -8,9 +8,10 @@ body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,
 header { display:flex; align-items:center; gap:16px; padding:12px 24px; border-bottom:1px solid var(--line); }
 h1 { font-size:18px; margin:0; } h2 { font-size:16px; margin:16px 0 8px; }
 main { max-width:1040px; margin:0 auto; padding:16px 24px; }
-button, select, input { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 10px; }
+button, select, input, textarea { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 10px; }
+::placeholder { color:var(--muted); opacity:1; }
 button { cursor:pointer; } button:hover:not(:disabled) { border-color:var(--accent); } button:disabled { opacity:.45; cursor:default; }
-button.small { padding:1px 8px; font-size:12px; }
+button.small { padding:5px 10px; font-size:inherit; }
 #drop { border:2px dashed var(--line); border-radius:12px; padding:48px; text-align:center; transition:.15s; }
 #drop.over { border-color:var(--accent); background:var(--card); }
 #drop .big { font-size:18px; margin:0 0 8px; } .link { color:var(--accent); cursor:pointer; text-decoration:underline; }

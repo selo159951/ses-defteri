@@ -19,6 +19,8 @@
     set_update_note: "The only internet use of the app: it reads a small version file. No recording or text is ever sent.",
     set_update_now: "Check now", set_checking: "Checking…",
     set_saved: "Saved", set_failed: "Could not save: {e}",
+    set_view: "View", set_zoom: "Interface size: {n}%", set_zoom_default: "Default size",
+    set_zoom_note: "Ctrl + and Ctrl - also change the size. The choice is kept for the next start.",
     set_record: "Meeting recording", set_rec_system: "Record the computer's sound (Teams, Meet, Zoom, videos…)",
     set_rec_mic: "Record the microphone", set_mic_which: "Microphone", set_mic_default: "Windows default microphone",
     set_live_default: "Start live text with every recording (uses the computer more; can be switched during recording)",
@@ -44,6 +46,8 @@
     set_update_note: "Programın tek internet kullanımı budur: küçük bir sürüm dosyası okunur. Hiçbir kayıt ya da metin gönderilmez.",
     set_update_now: "Şimdi denetle", set_checking: "Bakılıyor…",
     set_saved: "Kaydedildi", set_failed: "Kaydedilemedi: {e}",
+    set_view: "Görünüm", set_zoom: "Arayüz büyüklüğü: %{n}", set_zoom_default: "Normal boyut",
+    set_zoom_note: "Ctrl + ve Ctrl - ile de büyütüp küçültebilirsiniz. Seçim bir sonraki açılışta da geçerli olur.",
     set_record: "Toplantı kaydı", set_rec_system: "Bilgisayardan gelen sesi kaydet (Teams, Meet, Zoom, video…)",
     set_rec_mic: "Mikrofonu kaydet", set_mic_which: "Mikrofon", set_mic_default: "Windows'un varsayılan mikrofonu",
     set_live_default: "Kayda başlarken canlı yazıyı da aç (bilgisayarı yorar; kayıt sırasında da açılıp kapatılabilir)",
@@ -97,6 +101,29 @@
     try { S.cfg = await p; draw(); } catch (e) { toast(t("set_failed", { e: msg(e) })); }
   }
   const saveMinutes = (values) => apply(call("set_minutes_settings", values));
+
+  function viewCard() {
+    const pct = Math.round((S.settings.ui_zoom || 1) * 100);
+    const label = el("span", { textContent: t("set_zoom", { n: pct }) });
+    const range = el("input", { id: "setZoom", type: "range", min: 80, max: 160, step: 10, value: pct });
+    const save = async (value) => {
+      try {
+        S.settings = await call("set_settings", { ui_zoom: Number(value) / 100 });
+        await call("apply_zoom");
+        toast(t("set_saved"));
+      } catch (e) { toast(t("set_failed", { e: msg(e) })); }
+    };
+    range.oninput = () => { label.textContent = t("set_zoom", { n: range.value }); };
+    range.onchange = () => save(range.value);
+    const reset = button("set_zoom_default", "refresh", () => {
+      range.value = 100;
+      label.textContent = t("set_zoom", { n: 100 });
+      save(100);
+    });
+    return card(t("set_view"),
+      el("div", { className: "frow" }, label, el("div", { className: "btnrow" }, range, reset)),
+      el("p", { className: "sline dim", textContent: t("set_zoom_note") }));
+  }
 
   function companyCard() {
     const name = el("input", { id: "setCompany", value: S.cfg.company_name, placeholder: t("set_company_ph"), maxLength: 120 });
@@ -199,8 +226,8 @@
 
   function draw() {
     // the simple edition keeps it short: recording, company name / logo, updates
-    const cards = window.SIMPLE_EDITION ? [recordCard(), companyCard(), updateCard()]
-      : [recordCard(), companyCard(), minutesCard(), templateCard(), updateCard()];
+    const cards = window.SIMPLE_EDITION ? [viewCard(), recordCard(), companyCard(), updateCard()]
+      : [viewCard(), recordCard(), companyCard(), minutesCard(), templateCard(), updateCard()];
     root.replaceChildren(el("h2", { textContent: t("set_title") }), ...cards);
     hydrateIcons(root);
   }

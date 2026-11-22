@@ -82,6 +82,8 @@ def main():
             if not attached:  # the page is loaded once; register the drop handler once
                 attach_file_drop(window, api)
                 attached.append(True)
+                api.watch_zoom()  # Ctrl +/- change the interface size and are remembered
+            api.apply_zoom()  # every page load starts at the chosen size
 
         window.events.loaded += on_loaded
         webview.start(gui="edgechromium" if sys.platform == "win32" else None, icon=str(ICON),
@@ -93,4 +95,7 @@ def main():
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()  # a frozen exe must not start its own child processes again
     main()
