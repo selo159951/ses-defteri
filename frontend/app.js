@@ -166,9 +166,15 @@ function jobRow(j, q) {
   del.onclick = async () => { if (confirm(t("delete_confirm", { name: j.filename }))) { await call("delete_job", j.id); loadJobs(); } };
   const star = el("button", { className: "small icon jstar" + (j.starred ? " on" : ""), title: t("star_title") }, ic("star"));
   star.onclick = async (e) => { e.preventDefault(); try { await call("set_job_star", j.id, !j.starred); } catch (err) { /* shown next time */ } loadJobs(); };
-  const tag = el("button", { textContent: t("tags_btn"), className: "small" });
-  tag.onclick = () => { info.append(tagBox); tagEditor(j, tagBox); }; // the chips give way to the input
-  const btns = el("div", { className: "jbtns" }, star, tag, ren, j.status === "queued" ? "" : del); // waiting in line: cancel (below) instead of delete
+  const tag = el("button", { className: "small" }, icText("tag", t("tags_btn")));
+  ren.prepend(ic("pencil")); del.prepend(ic("trash"));
+  // tag / rename / delete live in one "⋯" menu: four buttons on every row made the list look busy
+  const rowMenu = el("details", { className: "menu jmore" },
+    el("summary", { textContent: "⋯", title: t("more_actions") }),
+    el("div", { className: "popmenu" }, tag, ren, ...(j.status === "queued" ? [] : [del]))); // waiting in line: cancel (below)
+  for (const b of [tag, ren, del]) b.addEventListener("click", () => { rowMenu.open = false; });
+  tag.onclick = () => { rowMenu.open = false; info.append(tagBox); tagEditor(j, tagBox); }; // the chips give way to the input
+  const btns = el("div", { className: "jbtns" }, star, rowMenu);
   if (j.status === "running" || j.status === "queued") {
     const pz = el("button", { className: "small" }, icText("pause", t("pause")));
     pz.onclick = async () => { try { await call("pause_job", j.id); } catch {} loadJobs(); };
