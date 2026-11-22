@@ -10,6 +10,10 @@
 Rules: answers come only from the recordings (or the facts about the app below); "not found" when nothing matches,
 never invented; other topics are politely declined. A small model can still misread: every answer links to its
 sources so it can be checked.
+
+Some questions are not questions but jobs ("Ece'yi kişilere ekle", "son kaydı aç"): they are read from the words
+by code when possible, otherwise by the model, and answered with an "action" the page shows as buttons - nothing
+happens until the user clicks (backend/actions.py does the work then).
 """
 from __future__ import annotations
 
@@ -42,14 +46,20 @@ TEXT = {
            "no_rec_in_range": "{r} tarihinde kayıt yok.", "nearest": " En yakın kayıtlar: {d}.",
            "vague": "Hangi toplantıyı, kişiyi ya da konuyu soruyorsunuz? Örneğin: \"Bugünkü toplantının özeti\", "
                     "\"Geçen hafta Ahmet ne dedi?\", \"Fiyat artışı hakkında neler konuşuldu?\"",
-           "no_records": "Henüz metne çevrilmiş bir kayıt yok."},
+           "no_records": "Henüz metne çevrilmiş bir kayıt yok.",
+           "act_kisi_ekle": "Tamam, kayıtlarda {name} adında bir konuşmacı arayacağım.",
+           "act_kayit_ac": "Tamam, uygun kayıtları bulup listeliyorum.",
+           "act_konusmaci_adi": "Tamam, konuşmacının adını {name} olarak değiştirebilirim."},
     "en": {"off_topic": "I can't help with that; I know your meeting recordings and Ses Defteri. Try: \"What did we "
                         "discuss yesterday?\", \"Which decisions were made last week?\", \"What did Ahmet say about the price?\"",
            "not_found": "I could not find a recording that matches{when}.", "when": " ({r})",
            "no_rec_in_range": "There is no recording on {r}.", "nearest": " Nearest recordings: {d}.",
            "vague": "Which meeting, person or topic do you mean? For example: \"Summary of today's meeting\", "
                     "\"What did Ahmet say last week?\", \"What was said about the price rise?\"",
-           "no_records": "There are no transcribed recordings yet."},
+           "no_records": "There are no transcribed recordings yet.",
+           "act_kisi_ekle": "Okay, I'll search your recordings for a speaker named {name}.",
+           "act_kayit_ac": "Okay, I'll list the recordings that match.",
+           "act_konusmaci_adi": "Okay, I can rename that speaker to {name}."},
 }
 # greetings, thanks, "how are you": answered at once, without the model (folded text, whole message)
 _SMALL_TALK = [
@@ -214,6 +224,10 @@ INTENT_SCHEMA = {
         "tur": {"type": "string", "enum": ["genel", "karar", "gorev", "soru", "ozet"]},
         "kisiler": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
         "anahtar": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+        "eylem": {"type": "string", "enum": ["yok", "kisi_ekle", "kayit_ac", "konusmaci_adi"]},
+        "eylem_ad": {"type": "string"},
+        "eylem_kayit": {"type": "string"},
+        "eylem_konusmaci": {"type": "integer"},
     },
     "required": ["niyet", "tur", "kisiler", "anahtar"],
 }
@@ -249,6 +263,14 @@ def intent_prompt(question: str, today: dt.date, people: list[dict], history: li
         "kisiler: soruda adı geçen kişiler (yalın hâliyle: 'Ahmet'in' -> 'Ahmet').\n"
         "anahtar: aranacak konu kelimeleri (en fazla 6; isimleri, tarihleri ve 'ne dedi', 'toplantı' gibi genel "
         "kelimeleri yazma). Eş anlamlıları da ekleyebilirsin (zam -> fiyat artışı).\n"
+        "eylem: kullanıcı bir iş istiyorsa onun adı, istemiyorsa 'yok'. 'kisi_ekle' = bir kişiyi kaydetmek "
+        "(\"Ece'yi kişilere ekle\" -> eylem_ad 'Ece'); 'kayit_ac' = bir kaydı açmak ('son kaydı aç', 'dünkü "
+        "toplantıyı aç' -> eylem_kayit 'dünkü toplantı'); 'konusmaci_adi' = bir kayıttaki konuşmacıya ad vermek "
+        "('son kayıttaki Konuşmacı 2 Ahmet' -> eylem_ad 'Ahmet', eylem_kayit 'son kayıt', eylem_konusmaci 2).\n"
+        "eylem_ad: eylemde geçen kişinin adı ('Ece', 'Ahmet'); eylem yoksa boş bırak.\n"
+        "eylem_kayit: kaydı belirleyen kelimeler ('son toplantı', '12 kasım', 'bütçe toplantısı'); eylem yoksa "
+        "boş bırak.\n"
+        "eylem_konusmaci: konuşmacı numarası, 1'den başlar ('Konuşmacı 2' -> 2); belirtilmediyse 0.\n"
         "Kayıtlı kişiler:\n" + people_block(people))
     prev = ""
     for h in history[-3:]:
@@ -394,10 +416,61 @@ def answer_prompt(question: str, rows: list[dict], lang: str, today: dt.date, wh
     return system, "Kayıt satırları:\n" + "\n".join(source_lines(rows, lang)) + f"\n\nSoru: {question}"
 
 
+# ---------------------------------------------------------------- actions ("Ece'yi kişilere ekle")
+# read from the words themselves when possible, before the model: cheap and reliable. The patterns run on the folded
+# question; fold() keeps the length, so a match's spans can be cut out of the original text with its capital letters.
+_RE_ADD_TR = re.compile(r"\b(\w+)'?(?:y[iıuü]|[iıuü])?\s+(?:kisilere|kisiler\s+sayfasina|kisiler\s+listesine)\s+ekle\b")
+_RE_ADD_EN = re.compile(r"\badd\s+(\w+)\s+to\s+(?:people|contacts)\b")
+_RE_OPEN_TR = re.compile(r"(?:(\S.*?)\s+)?(?:kaydini|kayditi|kaydilari|kaydi|kayit|toplantisini|toplantilari|toplantiyi)\s+ac\b")
+_RE_OPEN_EN = re.compile(r"\bopen\s+(?:the\s+)?(last|latest)\s+(?:recording|meeting)\b")
+ACTIONS = ("kisi_ekle", "kayit_ac", "konusmaci_adi")
+
+
+def _cut(question: str, m: re.Match, g: int) -> str:
+    """The matched group, cut out of the original question (fold() keeps the positions)."""
+    return question[m.start(g):m.end(g)].strip(" '’")
+
+
+def detect_action(question: str) -> dict | None:
+    """{"eylem", "ad", "kayit", "konusmaci"} when the question asks for something the app can do, else None."""
+    q = chatdb.fold(question)
+    m = _RE_ADD_TR.search(q) or _RE_ADD_EN.search(q)
+    if m:
+        return {"eylem": "kisi_ekle", "ad": _cut(question, m, 1), "kayit": "", "konusmaci": 0}
+    m = _RE_OPEN_TR.search(q) or _RE_OPEN_EN.search(q)
+    if m:
+        return {"eylem": "kayit_ac", "ad": "", "kayit": _cut(question, m, 1), "konusmaci": 0}
+    return None
+
+
+def action_reply(action: dict, lang: str, intent: dict) -> dict:
+    """An action is only proposed: the page shows what would happen and waits for the user's click."""
+    name = str(action.get("ad") or "").strip()
+    return {"answer": TEXT[lang]["act_" + action["eylem"]].format(name=name), "action": action,
+            "sources": [], "found": True, "intent": intent, "range": ""}
+
+
+def _action_from_intent(question: str, intent: dict) -> dict | None:
+    """The model read the action out of a phrasing the code does not know (konusmaci_adi and the like)."""
+    eylem = str(intent.get("eylem") or "yok")
+    if eylem not in ACTIONS:
+        return None
+    ad = str(intent.get("eylem_ad") or "").strip()[:80]
+    if eylem in ("kisi_ekle", "konusmaci_adi") and not ad:  # a name is the one thing we cannot guess
+        return None
+    try:
+        spk = int(intent.get("eylem_konusmaci") or 0)
+    except (TypeError, ValueError):
+        spk = 0
+    return {"eylem": eylem, "ad": ad,
+            "kayit": str(intent.get("eylem_kayit") or "").strip()[:120], "konusmaci": max(0, spk)}
+
+
 # ---------------------------------------------------------------- the whole question
 def ask(question: str, history: list[dict] | None = None, lang: str = "tr", generate=None, people: list[dict] | None = None,
         now: dt.datetime | None = None, semantic=None, cancel=None) -> dict:
-    """{"answer", "sources": [...], "found", "intent", "range"}."""
+    """{"answer", "sources": [...], "found", "intent", "range"}; with "action" when the question asks the
+    app to do something (then there is no answer step: the page proposes the action instead)."""
     lang = lang if lang in TEXT else "tr"
     T = TEXT[lang]
     question = (question or "").strip()[:500]
@@ -414,13 +487,20 @@ def ask(question: str, history: list[dict] | None = None, lang: str = "tr", gene
     reply = small_talk(question, lang)
     if reply:
         return {"answer": reply, "sources": [], "found": True, "intent": {"niyet": "sohbet"}, "range": ""}
+    action = detect_action(question)
+    if action:
+        return action_reply(action, lang, {"niyet": "eylem", "eylem": action["eylem"]})
     chatdb.sync()
 
     system, prompt = intent_prompt(question, now.date(), people, history)
     intent = generate(prompt, schema=INTENT_SCHEMA, system=system, max_tokens=300, temperature=0.1, cancel=cancel)
     kisiler = [str(x) for x in intent.get("kisiler") or []][:4]
+    action = _action_from_intent(question, intent)
     intent = {"niyet": intent.get("niyet", "kayit"), "tur": kind_of_question(question), "kisiler": kisiler,
-              "anahtar": clean_words([str(x) for x in intent.get("anahtar") or []], kisiler)}
+              "anahtar": clean_words([str(x) for x in intent.get("anahtar") or []], kisiler),
+              **({"eylem": action["eylem"]} if action else {})}
+    if action:
+        return action_reply(action, lang, intent)
 
     if intent["niyet"] == "kapsam_disi":
         # a small model sometimes calls a real meeting question off topic ("Reklam bütçesini kim onaylayacak?"):

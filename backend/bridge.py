@@ -578,6 +578,68 @@ class Api(SystemApi, LlmApi, SearchApi):
         except Exception as e:
             return {"error": "failed", "detail": str(e)[:300]}
 
+    # ---------------- assistant actions (proposed by the assistant, run after the user's click) ----------------
+    def action_find_speaker(self, name: str) -> dict:
+        """Every finished recording's speakers named `name`, grouped by voice. Can take a few seconds."""
+        from . import actions
+
+        if not isinstance(name, str) or not name.strip():
+            return {"error": "bad_name"}
+        try:
+            return actions.find_speaker_groups(name.strip()[:80])
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def action_add_group(self, name: str, items: list, person_id: str | None = None) -> dict:
+        """Add every {"job_id", "speaker"} as a voice sample of one person (the given one, or a new `name`)."""
+        from . import actions
+
+        if not isinstance(name, str) or not name.strip():
+            return {"error": "bad_name"}
+        if not isinstance(items, list) or not 1 <= len(items) <= 50:
+            return {"error": "bad_items"}
+        clean = []
+        for it in items:
+            if not isinstance(it, dict):
+                return {"error": "bad_items"}
+            jid, spk = it.get("job_id"), it.get("speaker")
+            if not isinstance(jid, str) or not jid.isalnum() or isinstance(spk, bool) \
+                    or not isinstance(spk, (int, float)) or not 0 <= int(spk) < 20:
+                return {"error": "bad_items"}
+            clean.append({"job_id": jid, "speaker": int(spk)})
+        if person_id is not None and (not isinstance(person_id, str) or not person_id.isalnum()):
+            return {"error": "bad_person"}
+        try:
+            return actions.add_group(name.strip()[:80], clean, person_id)
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def action_find_recording(self, words: str) -> dict:
+        """{"matches": [{"id", "title", "created"}]} for words like 'son', a date or title words."""
+        from . import actions
+
+        if not isinstance(words, str):
+            return {"error": "bad_words"}
+        try:
+            return {"matches": actions.find_recording(words[:200])}
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
+    def action_name_speaker(self, job_id: str, speaker: int, name: str) -> dict:
+        """Give a speaker of a recording a new name."""
+        from . import actions
+
+        if not isinstance(job_id, str) or not job_id.isalnum():
+            return {"error": "bad_job"}
+        if isinstance(speaker, bool) or not isinstance(speaker, (int, float)) or not 0 <= int(speaker) < 20:
+            return {"error": "bad_speaker"}
+        if not isinstance(name, str) or not name.strip():
+            return {"error": "bad_name"}
+        try:
+            return actions.name_speaker(job_id, int(speaker), name.strip()[:80])
+        except Exception as e:
+            return {"error": "failed", "detail": str(e)[:300]}
+
     # ---------------- version and updates ----------------
     def get_app_info(self) -> dict:
         return {"version": version.VERSION, "edition": version.edition()}
