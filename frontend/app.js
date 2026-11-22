@@ -844,11 +844,35 @@ async function splitTo(speaker) {
 
 /* ================= player ================= */
 const audio = $("audio");
+const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (e) { /* not remembered */ } };
+// defaultPlaybackRate makes load() (another recording) keep the chosen speed
+const setSpeed = (v) => { audio.playbackRate = +v; audio.defaultPlaybackRate = +v; };
+let skipSilence = false;
+try {
+  const savedSpeed = localStorage.getItem("playbackSpeed");
+  if (savedSpeed && [...$("speed").options].some((o) => o.value === savedSpeed)) $("speed").value = savedSpeed;
+  $("skipSilence").checked = localStorage.getItem("skipSilence") === "1";
+} catch (e) { /* defaults */ }
+skipSilence = $("skipSilence").checked;
+setSpeed($("speed").value);
 function playRange(a, b) { stopAt = b; audio.currentTime = a; audio.play(); }
 let lastPlaying = null;
+/* "Skip silence": while playing, a pause longer than 1.5 s between two lines jumps to the next line. */
+function skipGap() {
+  const segs = job?.segments;
+  if (!segs?.length) return;
+  const now = audio.currentTime;
+  let next = null, prevEnd = 0;
+  for (const s of segs) {
+    if (s.start > now) { next = s.start; break; }
+    if (s.end > prevEnd) prevEnd = s.end;
+  }
+  if (next !== null && now >= prevEnd && next - prevEnd > 1.5) audio.currentTime = next;
+}
 audio.ontimeupdate = () => {
   $("clock").textContent = fmt(audio.currentTime);
   if (stopAt !== null && audio.currentTime >= stopAt) { audio.pause(); stopAt = null; }
+  else if (skipSilence && !audio.paused) skipGap();
   if (!job) return;
   const cur = job.segments.find((s) => audio.currentTime >= s.start && audio.currentTime < s.end);
   const rowEl = cur && !audio.paused ? $("seg" + cur.id) : null;
@@ -863,7 +887,8 @@ const togglePlay = () => { stopAt = null; audio.paused ? audio.play() : audio.pa
 $("pp").onclick = togglePlay;
 $("back").onclick = () => (audio.currentTime = Math.max(0, audio.currentTime - 5));
 $("fwd").onclick = () => (audio.currentTime += 5);
-$("speed").onchange = (e) => (audio.playbackRate = +e.target.value);
+$("speed").onchange = (e) => { setSpeed(e.target.value); remember("playbackSpeed", e.target.value); };
+$("skipSilence").onchange = (e) => { skipSilence = e.target.checked; remember("skipSilence", skipSilence ? "1" : "0"); };
 
 /* ================= export ================= */
 /* "Analysis" is only offered when the job has a finished analysis; SRT makes no sense for it. */
@@ -994,8 +1019,8 @@ document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.code === "Space" && inView) { e.preventDefault(); togglePlay(); }
   else if (e.ctrlKey && e.key.toLowerCase() === "f" && inView) { e.preventDefault(); $("q").focus(); $("q").select(); }
   else if (e.ctrlKey && e.key.toLowerCase() === "z" && inView && !typing) { e.preventDefault(); undo(); }
-  else if (e.altKey && e.key === "ArrowLeft" && inView) { e.preventDefault(); $("back").click(); }
-  else if (e.altKey && e.key === "ArrowRight" && inView) { e.preventDefault(); $("fwd").click(); }
+  else if (e.altKey && e.key === "ArrowLeft" && inView && !typing) { e.preventDefault(); $("back").click(); }
+  else if (e.altKey && e.key === "ArrowRight" && inView && !typing) { e.preventDefault(); $("fwd").click(); }
   else if (e.key === "Escape") $("selPop").hidden = true;
 });
 $("helpBtn").onclick = () => $("help").showModal();

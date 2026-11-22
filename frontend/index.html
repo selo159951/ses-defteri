@@ -121,6 +121,10 @@
     <button id="undoBtn" class="icon" disabled data-icon="undo" data-i18n-title="undo_title"></button>
     <button id="helpBtn" class="icon" data-icon="keyboard" data-i18n-title="shortcuts_title"></button>
     <button id="wordBtn" class="primary wordbtn" data-icon="file-text" data-i18n="save_word" data-i18n-title="save_word_title"></button>
+    <select id="minutesFmt" data-i18n-title="minutes_fmt_title">
+      <option value="docx" data-i18n="minutes_word"></option>
+      <option value="pdf" data-i18n="minutes_pdf"></option>
+    </select>
     <button id="minutesBtn" class="wordbtn" data-icon="clipboard-list" data-i18n="minutes_btn" data-i18n-title="minutes_btn_title"></button>
     <details class="menu" id="expMenu"><summary data-i18n="export"></summary>
       <div>
@@ -185,6 +189,7 @@
   <button id="back">−5s</button><button id="fwd">+5s</button>
   <span id="clock">00:00:00</span>
   <select id="speed"><option value="0.75">0.75x</option><option value="1" selected>1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select>
+  <label class="toggle pskip" data-i18n-title="skip_silence_title"><input type="checkbox" id="skipSilence"><span class="knob"></span><span data-i18n="skip_silence"></span></label>
   <span id="saved"></span>
 </footer>
 <div id="selPop" hidden></div>

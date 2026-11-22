@@ -115,6 +115,23 @@ def test_builtin_with_logo_and_color():
     assert str(d.paragraphs[0].runs[0].font.color.rgb) == "FF0000"
 
 
+def test_talk_time_section_from_segments():
+    asr.set_setting("minutes_sections", ["participants", "talktime"])
+    txt = text_of(minutes.build(job(), analysis(), "tr"))
+    assert "Konuşma süreleri" in txt
+    assert "Kim | Süre | %" in txt
+    assert "Ayşe | 00:40 | %80" in txt and "Konuşmacı 2 | 00:10 | %20" in txt
+    # ordered after the participants
+    assert txt.index("Katılımcılar") < txt.index("Konuşma süreleri")
+
+
+def test_talk_time_without_analysis():
+    asr.set_setting("minutes_sections", ["talktime"])
+    txt = text_of(minutes.build(job(), None, "tr", note_missing=False))
+    assert "Ayşe | 00:40 | %80" in txt
+    assert minutes.clean_sections(["talktime"]) == ["talktime"]
+
+
 def test_settings_are_cleaned():
     asr.set_setting("company_color", "red; drop")
     asr.set_setting("minutes_sections", ["tasks", "evil", "tasks", "summary"])
@@ -197,6 +214,17 @@ def test_bad_template_rejected(tmp_path):
         minutes.set_template(str(p))
     with pytest.raises(ValueError):
         minutes.set_template(str(tmp_path / "x.pdf"))
+
+
+# ---------------------------------------------------------------- PDF
+def test_build_pdf_writes_a_pdf(tmp_path):
+    pytest.importorskip("fpdf")
+    asr.set_setting("minutes_sections", ["participants", "talktime", "summary", "tasks"])
+    out = minutes.build_pdf(job(), analysis(), "tr")
+    assert out.startswith(b"%PDF")
+    p = tmp_path / "tutanak.pdf"
+    p.write_bytes(out)
+    assert p.stat().st_size > 1000 and p.read_bytes().startswith(b"%PDF")
 
 
 def test_sample_template_fills_cleanly():

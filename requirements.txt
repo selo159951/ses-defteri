@@ -7,4 +7,5 @@ tokenizers
 sounddevice
 soundcard
 python-docx
+fpdf2
 pytest

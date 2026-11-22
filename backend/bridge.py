@@ -22,6 +22,7 @@ from .system_api import SystemApi
 
 EXPORT_TYPES = {
     "docx": "Word document (*.docx)",
+    "pdf": "PDF (*.pdf)",
     "txt": "Text file (*.txt)",
     "md": "Markdown (*.md)",
     "srt": "Subtitles (*.srt)",
@@ -788,14 +789,16 @@ class Api(SystemApi, LlmApi, SearchApi):
         self._remember_dir("export_dir", str(target.parent))
         return {"paths": [str(target)]}
 
-    def save_minutes(self, job_id: str, lang: str = "tr") -> dict:
-        """Meeting minutes as Word: the user's template when there is one, otherwise the built-in layout."""
+    def save_minutes(self, job_id: str, lang: str = "tr", fmt: str = "docx") -> dict:
+        """Meeting minutes as Word or PDF. Word uses the user's template when there is one, otherwise the built-in
+        layout; PDF always uses the built-in layout."""
         import json
 
         import webview
 
         from . import minutes
 
+        fmt = "pdf" if str(fmt).lower() == "pdf" else "docx"
         data = _job(job_id)
         analysis = None
         path = store.job_path(job_id) / "analysis.json"
@@ -807,19 +810,23 @@ class Api(SystemApi, LlmApi, SearchApi):
         label = minutes.LABELS.get(lang, minutes.LABELS["tr"])["minutes"]
         chosen = _first(self._window().create_file_dialog(
             webview.FileDialog.SAVE, directory=self._last_dir(),
-            save_filename=f"{_safe_name(Path(data['filename']).stem)} - {label}.docx", file_types=(EXPORT_TYPES["docx"],)))
+            save_filename=f"{_safe_name(Path(data['filename']).stem)} - {label}.{fmt}",
+            file_types=(EXPORT_TYPES[fmt],)))
         if not chosen:
             return {"cancelled": True}
         target = Path(chosen)
-        if target.suffix.lower() != ".docx":
-            target = target.with_name(target.name + ".docx")
+        if target.suffix.lower() != "." + fmt:
+            target = target.with_name(f"{target.name}.{fmt}")
         if self.SIMPLE:  # no analysis in the simple edition: who was there and what was said
-            _write(target, minutes.build(data, None, lang, use_template=False, note_missing=False,
-                                         sections=["participants", "transcript"]))
+            options = {"note_missing": False, "sections": ["participants", "transcript"]}
+            blob = (minutes.build_pdf(data, None, lang, **options) if fmt == "pdf"
+                    else minutes.build(data, None, lang, use_template=False, **options))
         else:
-            _write(target, minutes.build(data, analysis, lang))
+            blob = minutes.build_pdf(data, analysis, lang) if fmt == "pdf" else minutes.build(data, analysis, lang)
+        _write(target, blob)
         self._remember_dir("export_dir", str(target.parent))
-        return {"paths": [str(target)], "analysis": analysis is not None}
+        return {"paths": [str(target)], "analysis": analysis is not None,
+                "template": minutes.template_path().exists()}
 
     # ---------------- folder watch ----------------
     def get_watch(self) -> dict:
