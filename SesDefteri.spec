@@ -17,7 +17,7 @@ hiddenimports = ["backend.bridge", "backend.window", "backend.names", "backend.p
 # packages with native DLLs or data files (VAD model, docx template, WebView2 bridge …)
 for pkg in ("faster_whisper", "ctranslate2", "sherpa_onnx", "onnxruntime", "av", "webview",
             "clr_loader", "pythonnet", "tokenizers", "docx", "sounddevice", "_sounddevice_data", "soundcard", "cffi",
-            "pystray", "PIL", "comtypes", "pycaw"):
+            "pystray", "PIL", "comtypes", "pycaw", "fpdf", "fontTools"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hiddenimports += h
 
