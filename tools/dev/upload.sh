@@ -10,7 +10,7 @@ for f in "$@"; do
   for i in 1 2 3 4 5; do
     old=$("$GH" api repos/$REPO/releases/$RID/assets --paginate --jq ".[] | select(.name==\"$name\") | .id")
     [ -n "$old" ] && "$GH" api -X DELETE repos/$REPO/releases/assets/$old >/dev/null
-    code=$(curl -sS -o /dev/null -w "%{http_code}" --retry 0 --speed-time 120 --speed-limit 1024 \
+    code=$(curl --http1.1 -sS -o /dev/null -w "%{http_code}" --retry 0 --speed-time 120 --speed-limit 1024 \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
       -X POST -T "$f" "https://uploads.github.com/repos/$REPO/releases/$RID/assets?name=$name")
     if [ "$code" = "201" ]; then echo "OK $name"; break; fi

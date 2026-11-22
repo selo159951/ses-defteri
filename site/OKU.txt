@@ -1,0 +1,7 @@
+﻿Ses Defteri sitesi
+
+ses-defteri klasörünün içindekileri (index.html, logo.svg, surum.json) hosting panelinden
+selimoguz.com.tr/ses-defteri/ klasörüne yükleyin.
+
+Kurulu uygulamalar açılışta https://selimoguz.com.tr/ses-defteri/surum.json dosyasını okur.
+Bu dosya yüklenene kadar kimse güncelleme görmez. Yeni sürümde: tools\make_release_json.py ile surum.json'u yeniden üretin.
