@@ -1,23 +1,23 @@
 {
-  "version": "1.3.0",
-  "date": "2026-11-22",
-  "notes_tr": "Toplantı kaydı (bilgisayar sesi + mikrofon), isteğe bağlı canlı metin, toplantılarınız hakkında soru soran Asistan, şirket logolu Word tutanağı ve kendi şablonunuz, Ayarlar sayfası, uygulama içi güncelleme.",
-  "notes_en": "Meeting recording (computer sound + microphone), optional live text, an Assistant that answers questions about your meetings, Word minutes with your logo or your own template, a Settings page, in-app updates.",
+  "version": "1.4.0",
+  "date": "2026-11-23",
+  "notes_tr": "Asistan artık iş yapıyor: \"Ece'yi kişilere ekle\" deyin, kayıtlardaki sesleri karşılaştırıp ekler. Sohbetler kaydedilir.\nAdsız konuşmacılar için ad kutusu, \"Kişiler'e eklensin mi?\" önerisi, hitaptan ad (\"Günaydın Ece\").\nKim ne kadar konuştu, PDF tutanak, 5 sn geri/ileri ve sessizliği atla.\nKayıtlara yıldız ve etiket, toplu dışa aktarma/silme, yedek al / geri yükle.\nToplantı başlayınca \"Kaydedeyim mi?\", disk uyarısı, isteğe bağlı sistem tepsisi.\nYeni görünüm: sol menü, sekmeli Ayarlar ve Sistem, arayüz boyutu.\nDüzeltmeler: mikrofon yankısı konuşmacıları birleştirmiyor, uzun kayıtlarda pencere donmuyor.",
+  "notes_en": "The assistant can now act: say \"add Ece to people\" and it compares the voices in your recordings and adds her. Chats are saved.\nName box for unnamed speakers, \"add to People?\" prompt, names from greetings (\"Good morning Ece\").\nTalk time per person, PDF minutes, 5 s back/forward and skip silence.\nStar and tag recordings, bulk export/delete, backup and restore.\n\"Record this meeting?\" when a call starts, low disk warning, optional system tray.\nNew look: side menu, tabbed Settings and System, interface size.\nFixes: microphone echo no longer merges speakers; the window no longer freezes on long recordings.",
   "files": {
     "standart": {
-      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Setup.exe",
-      "size": 162462048,
-      "sha256": "58ee7c59bf738f64c19322ce0f10797764640f28a145e1ed23312616cdefb77c"
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.4.0/SesDefteri-Setup.exe",
+      "size": 173811032,
+      "sha256": "4ffd94ede6620ce78bff836c20b68ea54a6837daf2af115d26c10dd745cd4abc"
     },
     "nvidia": {
-      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-NVIDIA-Setup.exe",
-      "size": 1184625040,
-      "sha256": "50140d3375d6e8e18e1f4d492d09704fe6ace10ad5a814e8211db9572b46661c"
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.4.0/SesDefteri-NVIDIA-Setup.exe",
+      "size": 1195974064,
+      "sha256": "d539497516ef49d4fd184279a9bbfc2a9966ee7219644cb23fac3ff03355da21"
     },
     "basit": {
-      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.3.0/SesDefteri-Basit-Setup.exe",
-      "size": 147372840,
-      "sha256": "10275281ee42d7ba91addfdcc0a558c702409c6dfc3d39c53a5ee2dc34bae214"
+      "url": "https://github.com/selo159951/ses-defteri/releases/download/v1.4.0/SesDefteri-Basit-Setup.exe",
+      "size": 151698416,
+      "sha256": "94352fe729cde9ad45952eb650c8161e0a6da19def783919dfaa225f55b4988d"
     }
   }
 }
